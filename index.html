@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Procedural Asteroid (noise-based, v4)</title>
+  <style>body{margin:0;background:#000;overflow:hidden}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- Everything runs as an ES-module -->
+<script type="module">
+  /* ---------- imports ---------- */
+  import * as THREE from 'https://unpkg.com/three@0.128.0/build/three.module.js';
+  import { createNoise3D } from 'https://unpkg.com/simplex-noise@4.0.1/dist/esm/simplex-noise.js';
+
+  /* ---------- scene boilerplate ---------- */
+  const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'), antialias:true});
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(devicePixelRatio);
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+  camera.position.z = 4;
+
+  scene.add(new THREE.AmbientLight(0x404040));
+  const dir = new THREE.DirectionalLight(0xffffff, .9);
+  dir.position.set(3,4,5);
+  scene.add(dir);
+
+  /* ---------- asteroid generator ---------- */
+  function makeAsteroid() {
+    const RADIUS   = 1;
+    const SEGMENTS = 6;
+    const geometry = new THREE.SphereGeometry(RADIUS, SEGMENTS, SEGMENTS);
+
+    const noise3D  = createNoise3D();          // v4 helper
+    const posAttr  = geometry.attributes.position;
+    const v        = new THREE.Vector3();
+
+    const OCTAVES  = 3;
+    const BASE_FREQ = 1.4;
+    const BASE_AMP  = 0.32;
+
+    for (let i = 0; i < posAttr.count; i++) {
+      v.fromBufferAttribute(posAttr, i).normalize();
+
+      // fractal Brownian motion (adds big bumps + tiny pits)
+      let n = 0, amp = 1, freq = BASE_FREQ;
+      for (let o = 0; o < OCTAVES; o++) {
+        n   += amp * noise3D(v.x * freq, v.y * freq, v.z * freq);
+        amp *= 0.5;
+        freq*= 2.0;
+      }
+
+      v.multiplyScalar(RADIUS + n * BASE_AMP);
+      posAttr.setXYZ(i, v.x, v.y, v.z);
+    }
+
+    posAttr.needsUpdate = true;
+    geometry.computeVertexNormals();           // correct lighting
+
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x888888,
+      roughness: 0.9,
+      metalness: 0.05,
+      flatShading: true     // toggle to false for a smoother look
+    });
+
+    return new THREE.Mesh(geometry, material);
+  }
+
+  const asteroid = makeAsteroid();
+  scene.add(asteroid);
+
+  /* ---------- render loop ---------- */
+  function animate(){
+    requestAnimationFrame(animate);
+    asteroid.rotation.x += 0.003;
+    asteroid.rotation.y += 0.005;
+    asteroid.rotation.z -= 0.002;
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  /* ---------- handle resizes ---------- */
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+</script>
+</body>
+</html>
