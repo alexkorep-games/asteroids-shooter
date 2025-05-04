@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Procedural Asteroid (noise-based, v4)</title>
+  <title>Procedural Asteroid (Cell-Shaded Pink with Outline)</title>
   <style>body{margin:0;background:#000;overflow:hidden}</style>
 </head>
 <body>
@@ -25,7 +25,7 @@
   camera.position.z = 4;
 
   scene.add(new THREE.AmbientLight(0x404040));
-  const dir = new THREE.DirectionalLight(0xffffff, .9);
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
   dir.position.set(3,4,5);
   scene.add(dir);
 
@@ -35,48 +35,62 @@
     const SEGMENTS = 6;
     const geometry = new THREE.SphereGeometry(RADIUS, SEGMENTS, SEGMENTS);
 
-    const noise3D  = createNoise3D();          // v4 helper
+    const noise3D  = createNoise3D();
     const posAttr  = geometry.attributes.position;
     const v        = new THREE.Vector3();
 
     const OCTAVES  = 3;
     const BASE_FREQ = 1.4;
-    const BASE_AMP  = 0.32;
+    const BASE_AMP  = 0.132;
 
     for (let i = 0; i < posAttr.count; i++) {
       v.fromBufferAttribute(posAttr, i).normalize();
-
-      // fractal Brownian motion (adds big bumps + tiny pits)
       let n = 0, amp = 1, freq = BASE_FREQ;
       for (let o = 0; o < OCTAVES; o++) {
         n   += amp * noise3D(v.x * freq, v.y * freq, v.z * freq);
         amp *= 0.5;
         freq*= 2.0;
       }
-
       v.multiplyScalar(RADIUS + n * BASE_AMP);
       posAttr.setXYZ(i, v.x, v.y, v.z);
     }
 
     posAttr.needsUpdate = true;
-    geometry.computeVertexNormals();           // correct lighting
+    geometry.computeVertexNormals();
 
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x888888,
-      roughness: 0.9,
-      metalness: 0.05,
-      flatShading: true     // toggle to false for a smoother look
+    // --- 1. Create the main asteroid material and mesh ---
+    const mainMaterial = new THREE.MeshToonMaterial({
+      color: 0xDD44AA,
+      flatShading: true
     });
+    const mainAsteroid = new THREE.Mesh(geometry, mainMaterial);
 
-    return new THREE.Mesh(geometry, material);
+    // --- 2. Create the outline material and mesh ---
+    const outlineMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff, // White outline color
+        side: THREE.BackSide // Render only back faces
+    });
+    const outlineMesh = new THREE.Mesh(geometry, outlineMaterial); // Use the SAME geometry
+
+    // --- 3. Scale the outline mesh slightly ---
+    const OUTLINE_SCALE = 1.05; // Adjust this value for thicker/thinner lines
+    outlineMesh.scale.set(OUTLINE_SCALE, OUTLINE_SCALE, OUTLINE_SCALE);
+
+    // --- 4. Add the outline as a child of the main asteroid ---
+    // This ensures they move and rotate together easily
+    mainAsteroid.add(outlineMesh);
+
+    // Return the main asteroid (which now contains the outline)
+    return mainAsteroid;
   }
 
   const asteroid = makeAsteroid();
-  scene.add(asteroid);
+  scene.add(asteroid); // Add the main asteroid (with its child outline) to the scene
 
   /* ---------- render loop ---------- */
   function animate(){
     requestAnimationFrame(animate);
+    // Only need to rotate the parent asteroid object
     asteroid.rotation.x += 0.003;
     asteroid.rotation.y += 0.005;
     asteroid.rotation.z -= 0.002;
