@@ -11,7 +11,7 @@
       body {
         margin: 0;
         overflow: hidden;
-        cursor: none;
+        /* cursor: none; /* Manage cursor visibility in JS */
       }
       canvas {
         display: block;
@@ -27,12 +27,49 @@
         padding: 5px;
         border-radius: 3px;
         display: none;
+        z-index: 10;
+      }
+      #gameOverScreen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-family: sans-serif;
+        display: none; /* Initially hidden */
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 20;
+        cursor: default; /* Show default cursor over the overlay */
+      }
+      #gameOverScreen h1 {
+        margin-bottom: 20px;
+      }
+      #restartButton {
+        padding: 10px 20px;
+        font-size: 1.2em;
+        cursor: pointer; /* Pointer specifically for the button */
+        border: none;
+        border-radius: 5px;
+        background-color: #eee;
+        color: #333;
+      }
+      #restartButton:hover {
+        background-color: #ddd;
       }
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
     <div id="instructions">Loading assets...</div>
+    <div id="gameOverScreen">
+      <h1>Game Over</h1>
+      <button id="restartButton">Restart Game</button>
+    </div>
 
     <script
       async
@@ -58,12 +95,14 @@
       const ASTEROID_SPEED = 5.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
+      const ASTEROID_BASE_RADIUS = 1.0; // Base radius used in geometry
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
       const SPAWN_DISTANCE = 20;
       const DESPAWN_DISTANCE = 0;
       const MAX_ASTEROIDS = 50;
       const MOVEMENT_RATIO = 2.0;
+      const SHIP_COLLISION_RADIUS_FACTOR = 0.4; // Adjust ship collision size
 
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById("c"),
@@ -101,7 +140,16 @@
       const fbxLoader = new FBXLoader(loadingManager);
       const textureLoader = new THREE.TextureLoader(loadingManager);
       const instructionsDiv = document.getElementById("instructions");
+      const gameOverScreen = document.getElementById("gameOverScreen");
+      const restartButton = document.getElementById("restartButton");
       instructionsDiv.style.display = "block";
+
+      let isGameOver = false;
+      let animationFrameId = null;
+      let shipBoundingSphere = null;
+
+      // Set initial cursor state
+      document.body.style.cursor = "none";
 
       const backgroundTexture = textureLoader.load(
         "./assets/background.png",
@@ -131,6 +179,13 @@
             SHIP_DEPTH
           );
           scene.add(playerShip);
+
+          // Calculate bounding sphere after model is loaded and positioned
+          const box = new THREE.Box3().setFromObject(playerShip, true); // true to traverse children
+          shipBoundingSphere = new THREE.Sphere();
+          box.getBoundingSphere(shipBoundingSphere);
+          // Adjust radius if needed - FBX models might have complex origins
+          shipBoundingSphere.radius *= SHIP_COLLISION_RADIUS_FACTOR;
         },
         (xhr) => {
           const percentLoaded = (xhr.loaded / xhr.total) * 100;
@@ -153,7 +208,8 @@
           instructionsDiv.style.display = "none";
         }
         setupInputListeners();
-        animate();
+        restartButton.addEventListener("click", restartGame);
+        startGame(); // Start the game initially
       };
 
       loadingManager.onError = (url) => {
@@ -161,7 +217,7 @@
       };
 
       function makeAsteroid() {
-        const RADIUS = 1;
+        const RADIUS = ASTEROID_BASE_RADIUS;
         const SEGMENTS = 8;
         const geometry = new THREE.SphereGeometry(RADIUS, SEGMENTS, SEGMENTS);
 
@@ -189,6 +245,7 @@
 
         posAttr.needsUpdate = true;
         geometry.computeVertexNormals();
+        geometry.computeBoundingSphere(); // Compute bounding sphere for the geometry
 
         const mainMaterial = new THREE.MeshToonMaterial({
           color: 0xdd44aa,
@@ -216,6 +273,7 @@
           .normalize()
           .multiplyScalar(speed);
 
+        // Store geometry's bounding sphere radius for collision checks
         mainAsteroid.userData = {
           velocity: velocity,
           rotationSpeed: new THREE.Vector3(
@@ -223,6 +281,7 @@
             THREE.MathUtils.randFloat(-0.5, 0.5),
             THREE.MathUtils.randFloat(-0.5, 0.5)
           ),
+          boundingRadius: geometry.boundingSphere.radius,
         };
 
         return mainAsteroid;
@@ -235,6 +294,15 @@
         window.addEventListener("touchend", onTouchEnd);
         window.addEventListener("touchcancel", onTouchEnd);
       }
+
+      // Optional: Function to remove listeners if needed, though checking isGameOver is often sufficient
+      // function removeInputListeners() {
+      //     window.removeEventListener("mousemove", onMouseMove);
+      //     window.removeEventListener("touchstart", onTouchStart);
+      //     window.removeEventListener("touchmove", onTouchMove);
+      //     window.removeEventListener("touchend", onTouchEnd);
+      //     window.removeEventListener("touchcancel", onTouchEnd);
+      // }
 
       function screenToWorld(clientX, clientY) {
         const screenNDC = new THREE.Vector2();
@@ -289,10 +357,12 @@
       }
 
       function onMouseMove(event) {
+        if (isGameOver) return;
         updateTargetPositionFromScreenCoords(event.clientX, event.clientY);
       }
 
       function onTouchStart(event) {
+        if (isGameOver) return;
         event.preventDefault();
         if (event.touches.length > 0 && !isTouching) {
           isTouching = true;
@@ -307,6 +377,7 @@
       }
 
       function onTouchMove(event) {
+        if (isGameOver) return;
         event.preventDefault();
         if (!isTouching || event.touches.length === 0) return;
 
@@ -347,9 +418,10 @@
           Math.abs(spawnZ - camera.position.z);
         const width = height * camera.aspect;
 
+        // TODO make it fixed, not dependent on screen size
         asteroid.position.set(
-          THREE.MathUtils.randFloatSpread(width * 0.2),
-          THREE.MathUtils.randFloatSpread(height * 0.2),
+          THREE.MathUtils.randFloatSpread(width * 0.3),
+          THREE.MathUtils.randFloatSpread(height * 0.3),
           spawnZ
         );
 
@@ -358,6 +430,8 @@
           ASTEROID_SCALE_MAX
         );
         asteroid.scale.setScalar(scale);
+        // Update bounding radius based on scale
+        asteroid.userData.boundingRadius *= scale;
 
         asteroid.rotation.set(
           Math.random() * Math.PI * 2,
@@ -387,6 +461,9 @@
           const despawnZ = camera.position.z + DESPAWN_DISTANCE;
           if (asteroid.position.z > despawnZ) {
             scene.remove(asteroid);
+            // Dispose geometry and materials if needed for heavy scenes
+            // asteroid.geometry.dispose();
+            // asteroid.material.dispose(); // Check if material is shared
             asteroids.splice(i, 1);
           }
         }
@@ -396,6 +473,11 @@
         if (!playerShip) return;
 
         playerShip.position.lerp(targetShipPosition, PLAYER_SMOOTHING);
+
+        // Update the bounding sphere's center to match the ship's current position
+        if (shipBoundingSphere) {
+          shipBoundingSphere.center.copy(playerShip.position);
+        }
 
         const bankAmount = (targetShipPosition.x - playerShip.position.x) * 0.5;
         const tiltAmount = (targetShipPosition.y - playerShip.position.y) * 0.2;
@@ -414,10 +496,81 @@
         playerShip.quaternion.slerp(targetQuaternion, PLAYER_SMOOTHING * 1.5);
       }
 
+      function checkCollisions() {
+        if (!playerShip || !shipBoundingSphere) return false;
+
+        for (let i = 0; i < asteroids.length; i++) {
+          const asteroid = asteroids[i];
+          if (
+            !asteroid.userData ||
+            asteroid.userData.boundingRadius === undefined
+          )
+            continue;
+
+          // Simple sphere-sphere collision check
+          const asteroidRadius = asteroid.userData.boundingRadius; // Already scaled in spawnAsteroid
+          const distance = playerShip.position.distanceTo(asteroid.position);
+
+          if (distance < shipBoundingSphere.radius + asteroidRadius) {
+            return true; // Collision detected
+          }
+        }
+        return false; // No collision
+      }
+
+      function gameOver() {
+        isGameOver = true;
+        cancelAnimationFrame(animationFrameId); // Stop the animation loop
+        gameOverScreen.style.display = "flex"; // Show the game over screen
+        document.body.style.cursor = "default"; // Show the cursor
+        // Optional: removeInputListeners();
+      }
+
+      function restartGame() {
+        isGameOver = false;
+        gameOverScreen.style.display = "none"; // Hide the game over screen
+        document.body.style.cursor = "none"; // Hide the cursor again
+
+        // Reset ship position
+        targetShipPosition.set(0, -1, SHIP_DEPTH);
+        if (playerShip) {
+          playerShip.position.copy(targetShipPosition);
+          playerShip.quaternion.set(0, 0, 0, 1); // Reset rotation
+          playerShip.rotation.x = Math.PI * 0.05; // Apply initial tilt
+        }
+
+        // Remove all existing asteroids
+        for (let i = asteroids.length - 1; i >= 0; i--) {
+          scene.remove(asteroids[i]);
+          // Dispose geometry/material if needed
+          // asteroids[i].geometry.dispose();
+          // asteroids[i].material.dispose();
+        }
+        asteroids.length = 0; // Clear the array
+
+        // Reset spawn timer
+        timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
+
+        // Reset clock if needed (usually getDelta handles this fine)
+        // clock.start(); // Or clock.elapsedTime = 0;
+
+        // Restart the animation loop
+        // Optional: setupInputListeners(); // Re-add if removed in gameOver
+        animate();
+      }
+
+      function startGame() {
+        isGameOver = false;
+        document.body.style.cursor = "none";
+        animate();
+      }
+
       let timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
 
       function animate() {
-        requestAnimationFrame(animate);
+        if (isGameOver) return; // Don't continue if game is over
+
+        animationFrameId = requestAnimationFrame(animate); // Store the frame ID
 
         const deltaTime = clock.getDelta();
 
@@ -430,19 +583,28 @@
         updateAsteroids(deltaTime);
         updatePlayerShip(deltaTime);
 
+        if (checkCollisions()) {
+          gameOver();
+          return; // Stop this frame processing after game over
+        }
+
         renderer.render(scene, camera);
       }
 
       window.addEventListener("resize", () => {
+        if (isGameOver) return; // Don't resize things if game is over? Or maybe allow it.
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        // Recalculate clamping bounds if needed upon resize
+        // clampTargetShipPosition(); // May need adjustment if called here
       });
 
       if (!renderer.getContext()) {
         instructionsDiv.innerText = "WebGL is not supported by your browser!";
         instructionsDiv.style.color = "red";
         instructionsDiv.style.display = "block";
+        gameOverScreen.style.display = "none"; // Ensure game over isn't shown on WebGL error
       }
     </script>
   </body>
