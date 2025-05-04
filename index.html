@@ -59,14 +59,14 @@
       import { createNoise3D } from "simplex-noise";
 
       /* ---------- GAME CONSTANTS ---------- */
-      const ASTEROID_SPAWN_RATE = 12; // Asteroids per second
+      const ASTEROID_SPAWN_RATE = 3; // Asteroids per second
       const ASTEROID_SPEED = 5.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const PLAYER_SMOOTHING = 0.08; // Lower values = smoother/slower follow
-      const SHIP_DEPTH = -2; // How far the ship is relative to the world origin (0,0,0)
+      const SHIP_DEPTH = 0; // How far the ship is relative to the world origin (0,0,0)
       const SPAWN_DISTANCE = 20; // How far away (negative Z) asteroids spawn relative to camera
-      const DESPAWN_DISTANCE = 10; // How far *past* the camera (positive Z) asteroids get removed
+      const DESPAWN_DISTANCE = 0; // How far *past* the camera (positive Z) asteroids get removed
       const MAX_ASTEROIDS = 50;
 
       /* ---------- CORE THREE.JS SETUP ---------- */
@@ -116,7 +116,7 @@
         shipModelPath,
         (fbx) => {
           playerShip = fbx;
-          playerShip.scale.setScalar(0.008); // Scale might need adjustment
+          playerShip.scale.setScalar(0.02); // Scale might need adjustment
           playerShip.rotation.x = Math.PI * 0.05; // Slight tilt up
           playerShip.position.set(
             targetShipPosition.x,
