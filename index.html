@@ -95,7 +95,9 @@
       const ASTEROID_SPEED = 15.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
-      const ASTEROID_BASE_RADIUS = 1.0; // Base radius used in geometry
+      const ASTEROID_BASE_RADIUS = 1.0;
+      const SPAWN_AREA_WIDTH_RATIO = 0.4;
+
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
       const SPAWN_DISTANCE = 20;
@@ -106,9 +108,12 @@
 
       const PROJECTILE_SPEED = 100.0;
       const PROJECTILE_RADIUS = 0.1;
-      const SHOT_COOLDOWN = 0.15; // seconds
+      const SHOT_COOLDOWN = 0.15;
       const MAX_PROJECTILES = 30;
-      const PROJECTILE_DESPAWN_Z = -30; // Despawn projectiles further away
+      const PROJECTILE_DESPAWN_Z = -30;
+
+      const ASTEROID_DESTRUCTION_DURATION = 0.2; // Duration for shrink animation
+      const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff); // White flash
 
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById("c"),
@@ -139,8 +144,8 @@
       let targetShipPosition = new THREE.Vector3(0, -1, SHIP_DEPTH);
       const mouseNDC = new THREE.Vector2();
 
-      let isTouching = false; // For movement control
-      let isShooting = false; // For shooting control
+      let isTouching = false;
+      let isShooting = false;
       let touchStartPos = new THREE.Vector2();
       let touchStartShipPos = new THREE.Vector3();
       let timeSinceLastShot = 0;
@@ -215,7 +220,7 @@
         8
       );
       const projectileMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffff00,
+        color: 0xffff00, // Yellow projectiles
       });
 
       loadingManager.onLoad = () => {
@@ -268,6 +273,7 @@
           flatShading: true,
         });
         const mainAsteroid = new THREE.Mesh(geometry, mainMaterial);
+        mainAsteroid.userData.originalColor = mainMaterial.color.clone(); // Store original color
 
         const outlineMaterial = new THREE.MeshBasicMaterial({
           color: 0x220022,
@@ -277,6 +283,7 @@
         const OUTLINE_SCALE = 1.06;
         outlineMesh.scale.set(OUTLINE_SCALE, OUTLINE_SCALE, OUTLINE_SCALE);
         mainAsteroid.add(outlineMesh);
+        outlineMesh.userData.originalColor = outlineMaterial.color.clone(); // Store original outline color
 
         const speed = ASTEROID_SPEED;
 
@@ -289,14 +296,18 @@
           .multiplyScalar(speed);
 
         mainAsteroid.userData = {
+          ...mainAsteroid.userData, // Keep originalColor stored above
           velocity: velocity,
           rotationSpeed: new THREE.Vector3(
             THREE.MathUtils.randFloat(-0.5, 0.5),
             THREE.MathUtils.randFloat(-0.5, 0.5),
             THREE.MathUtils.randFloat(-0.5, 0.5)
           ),
-          boundingRadius: geometry.boundingSphere.radius, // Store original radius
-          isAsteroid: true, // Add a flag to identify asteroids
+          boundingRadius: geometry.boundingSphere.radius, // Store original geometry radius
+          isAsteroid: true,
+          isDying: false, // Add dying flag
+          dyingTimer: 0,
+          originalScale: 1.0, // Will be set when spawned
         };
 
         return mainAsteroid;
@@ -372,28 +383,22 @@
       function onMouseDown(event) {
         if (isGameOver) return;
         if (event.button === 0) {
-          // Left mouse button
           isShooting = true;
         }
       }
 
       function onMouseUp(event) {
         if (event.button === 0) {
-          // Left mouse button
           isShooting = false;
         }
       }
 
       function onTouchStart(event) {
         if (isGameOver) return;
-        event.preventDefault(); // Prevent default touch actions like scrolling
-
-        // Always start shooting on any touch start
+        event.preventDefault();
         isShooting = true;
-
-        // Handle movement only if not already touching (prevents multi-touch issues)
         if (event.touches.length === 1 && !isTouching) {
-          isTouching = true; // Indicate movement touch has started
+          isTouching = true;
           const touch = event.touches[0];
           touchStartPos.set(touch.clientX, touch.clientY);
           if (playerShip) {
@@ -406,52 +411,39 @@
 
       function onTouchMove(event) {
         if (isGameOver) return;
-        event.preventDefault(); // Prevent default touch actions like scrolling
-
-        // Only process movement if it's the primary movement touch
+        event.preventDefault();
         if (isTouching && event.touches.length > 0) {
-          // Find the touch that likely started the movement (usually the first one)
-          // More robust tracking might involve touch identifiers if needed
           const touch = event.touches[0];
           const currentTouchPos = new THREE.Vector2(
             touch.clientX,
             touch.clientY
           );
-
           const worldStartPos = screenToWorld(touchStartPos.x, touchStartPos.y);
           const worldCurrentPos = screenToWorld(
             currentTouchPos.x,
             currentTouchPos.y
           );
-
           const worldDelta = worldCurrentPos.sub(worldStartPos);
-
           targetShipPosition
             .copy(touchStartShipPos)
             .addScaledVector(worldDelta, MOVEMENT_RATIO);
-
           clampTargetShipPosition();
         }
       }
 
       function onTouchEnd(event) {
-        // Stop shooting if *all* touches are lifted
         if (event.touches.length === 0) {
           isShooting = false;
-          isTouching = false; // Reset movement flag as well
+          isTouching = false;
         } else {
-          // If some touches remain, check if the 'movement' touch was lifted
           let movementTouchStillActive = false;
           for (let i = 0; i < event.touches.length; i++) {
-            // Simplified check: Assume any remaining touch can continue movement/shooting
-            // A more complex system might track touch IDs
             movementTouchStillActive = true;
             break;
           }
           if (!movementTouchStillActive) {
-            isTouching = false; // Stop movement if the specific movement touch ended
+            isTouching = false;
           }
-          // Keep shooting if any touch remains down
           isShooting = true;
         }
       }
@@ -468,10 +460,10 @@
           Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
           Math.abs(spawnZ - camera.position.z);
         const width = height * camera.aspect;
-
+        
         asteroid.position.set(
-          THREE.MathUtils.randFloatSpread(width * 0.8), // Widen spawn area
-          THREE.MathUtils.randFloatSpread(height * 0.8),
+            THREE.MathUtils.randFloatSpread(width * SPAWN_AREA_WIDTH_RATIO),
+          THREE.MathUtils.randFloatSpread(height * SPAWN_AREA_WIDTH_RATIO),
           spawnZ
         );
 
@@ -480,7 +472,9 @@
           ASTEROID_SCALE_MAX
         );
         asteroid.scale.setScalar(scale);
-        asteroid.userData.boundingRadius *= scale; // Scale the bounding radius
+        asteroid.userData.originalScale = scale; // Store the actual initial scale
+        // Scale the bounding radius based on geometry radius and final scale
+        asteroid.userData.boundingRadius *= scale;
 
         asteroid.rotation.set(
           Math.random() * Math.PI * 2,
@@ -500,22 +494,16 @@
           projectileMaterial
         );
 
-        // Start slightly in front of the ship
-        const spawnOffset = new THREE.Vector3(0, 0, -1); // Adjust offset if needed
-        spawnOffset.applyQuaternion(playerShip.quaternion); // Align with ship's rotation (optional but good)
+        const spawnOffset = new THREE.Vector3(0, 0, -1);
+        spawnOffset.applyQuaternion(playerShip.quaternion);
         projectile.position.copy(playerShip.position).add(spawnOffset);
 
-        // Velocity straight forward from ship's perspective (or just along negative Z)
-        // Simple forward direction:
         const velocity = new THREE.Vector3(0, 0, -PROJECTILE_SPEED);
-        // More accurate (accounts for ship tilt/bank slightly, though might not be desired):
-        // const velocity = new THREE.Vector3(0, 0, -PROJECTILE_SPEED);
-        // velocity.applyQuaternion(playerShip.quaternion);
 
         projectile.userData = {
           velocity: velocity,
           boundingRadius: PROJECTILE_RADIUS,
-          isProjectile: true, // Flag to identify projectiles
+          isProjectile: true,
         };
 
         scene.add(projectile);
@@ -525,9 +513,34 @@
       function updateAsteroids(deltaTime) {
         for (let i = asteroids.length - 1; i >= 0; i--) {
           const asteroid = asteroids[i];
+
+          // --- Handle Dying Asteroids ---
+          if (asteroid.userData.isDying) {
+            asteroid.userData.dyingTimer -= deltaTime;
+
+            if (asteroid.userData.dyingTimer <= 0) {
+              disposeObject(asteroid);
+              asteroids.splice(i, 1);
+            } else {
+              // Calculate scale based on remaining time
+              const scaleFactor = THREE.MathUtils.clamp(
+                asteroid.userData.dyingTimer / ASTEROID_DESTRUCTION_DURATION,
+                0,
+                1 // Clamp between 0 and 1
+              );
+              asteroid.scale.setScalar(
+                asteroid.userData.originalScale * scaleFactor
+              );
+              // Optional: Could also fade color back from white here if desired
+            }
+            continue; // Skip normal updates for dying asteroids
+          }
+          // --- End Dying Asteroid Handling ---
+
+          // Normal asteroid update
           if (!asteroid.userData || !asteroid.userData.velocity) {
             console.warn("Asteroid missing user data, removing:", asteroid);
-            scene.remove(asteroid);
+            disposeObject(asteroid); // Use disposeObject here too
             asteroids.splice(i, 1);
             continue;
           }
@@ -553,7 +566,7 @@
           const projectile = projectiles[i];
           if (!projectile.userData || !projectile.userData.velocity) {
             console.warn("Projectile missing user data, removing:", projectile);
-            scene.remove(projectile); // Still try to remove from scene
+            disposeObject(projectile); // Use disposeObject
             projectiles.splice(i, 1);
             continue;
           }
@@ -561,7 +574,6 @@
 
           projectile.position.addScaledVector(velocity, deltaTime);
 
-          // Despawn if it goes too far
           if (projectile.position.z < PROJECTILE_DESPAWN_Z) {
             disposeObject(projectile);
             projectiles.splice(i, 1);
@@ -600,8 +612,10 @@
 
         for (let i = 0; i < asteroids.length; i++) {
           const asteroid = asteroids[i];
+          // Skip collision check if asteroid is already dying
           if (
             !asteroid.userData ||
+            asteroid.userData.isDying ||
             asteroid.userData.boundingRadius === undefined
           )
             continue;
@@ -619,11 +633,17 @@
       function checkProjectileAsteroidCollisions() {
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const projectile = projectiles[i];
-          if (!projectile.userData || !projectile.userData.velocity) continue; // Skip if data missing
+          if (!projectile.userData || !projectile.userData.velocity) continue;
 
           for (let j = asteroids.length - 1; j >= 0; j--) {
             const asteroid = asteroids[j];
-            if (!asteroid.userData || !asteroid.userData.velocity) continue; // Skip if data missing
+            // Skip collision check if asteroid is already dying
+            if (
+              !asteroid.userData ||
+              asteroid.userData.isDying ||
+              !asteroid.userData.velocity
+            )
+              continue;
 
             const distance = projectile.position.distanceTo(asteroid.position);
             const collisionThreshold =
@@ -631,10 +651,26 @@
               asteroid.userData.boundingRadius;
 
             if (distance < collisionThreshold) {
-              // Collision detected!
-              disposeObject(asteroid);
-              asteroids.splice(j, 1);
+              // --- Start Asteroid Destruction Animation ---
+              asteroid.userData.isDying = true;
+              asteroid.userData.dyingTimer = ASTEROID_DESTRUCTION_DURATION;
+              // Store original scale *if not already stored* (should be set at spawn)
+              // asteroid.userData.originalScale = asteroid.scale.x;
 
+              // Flash Effect
+              asteroid.material.color.copy(ASTEROID_FLASH_COLOR);
+              asteroid.material.emissive.copy(ASTEROID_FLASH_COLOR); // Make it glow white
+              // Flash outline too (optional)
+              if (asteroid.children[0] && asteroid.children[0].material) {
+                asteroid.children[0].material.color.copy(ASTEROID_FLASH_COLOR);
+              }
+
+              // Stop movement (handled now in updateAsteroids)
+              // asteroid.userData.velocity.set(0,0,0);
+              // asteroid.userData.rotationSpeed.set(0,0,0);
+              // --- End Asteroid Destruction Animation ---
+
+              // Remove the projectile immediately
               disposeObject(projectile);
               projectiles.splice(i, 1);
 
@@ -644,32 +680,45 @@
         }
       }
 
-      // Helper to dispose THREE.js object resources
       function disposeObject(obj) {
         if (!obj) return;
+
+        // Remove from scene first
+        if (obj.parent) {
+          obj.parent.remove(obj);
+        } else if (scene.children.includes(obj)) {
+          // Check if it's a direct child of the scene
+          scene.remove(obj);
+        }
+
+        // Dispose geometry and material(s)
         if (obj.geometry) {
           obj.geometry.dispose();
         }
         if (obj.material) {
-          // If material is an array
           if (Array.isArray(obj.material)) {
-            obj.material.forEach((material) => material.dispose());
+            obj.material.forEach((material) => {
+              if (material.map) material.map.dispose(); // Dispose textures
+              material.dispose();
+            });
           } else {
-            // Single material
+            if (obj.material.map) obj.material.map.dispose(); // Dispose texture
             obj.material.dispose();
           }
         }
-        // Dispose children recursively (important for asteroids with outlines)
+
+        // Dispose children recursively
+        // Use a while loop as modifying the array while iterating can cause issues
         while (obj.children.length > 0) {
-          disposeObject(obj.children[0]);
-          obj.remove(obj.children[0]);
+          disposeObject(obj.children[0]); // Recursively dispose the first child
+          // The child should have been removed from its parent in the recursive call,
+          // but double-check or ensure obj.remove(obj.children[0]) happens if needed.
         }
-        scene.remove(obj);
       }
 
       function gameOver() {
         isGameOver = true;
-        isShooting = false; // Stop shooting on game over
+        isShooting = false;
         cancelAnimationFrame(animationFrameId);
         gameOverScreen.style.display = "flex";
         document.body.style.cursor = "default";
@@ -677,7 +726,7 @@
 
       function restartGame() {
         isGameOver = false;
-        isShooting = false; // Ensure shooting state is reset
+        isShooting = false;
         gameOverScreen.style.display = "none";
         document.body.style.cursor = "none";
 
@@ -688,6 +737,7 @@
           playerShip.rotation.x = Math.PI * 0.05;
         }
 
+        // Clear existing objects using the dispose helper
         for (let i = asteroids.length - 1; i >= 0; i--) {
           disposeObject(asteroids[i]);
         }
@@ -699,8 +749,9 @@
         projectiles.length = 0;
 
         timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
-        timeSinceLastShot = 0; // Reset shot timer
+        timeSinceLastShot = 0;
 
+        // Clock delta reset is handled automatically by getDelta()
         startGame();
       }
 
@@ -721,27 +772,26 @@
         const deltaTime = clock.getDelta();
         timeSinceLastShot += deltaTime;
 
-        // Asteroid Spawning
         timeToNextSpawn -= deltaTime;
         if (timeToNextSpawn <= 0) {
           spawnAsteroid();
           timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
         }
 
-        // Projectile Spawning
         if (isShooting && timeSinceLastShot >= SHOT_COOLDOWN) {
           spawnProjectile();
-          timeSinceLastShot = 0; // Reset cooldown timer
+          timeSinceLastShot = 0;
         }
 
+        // Update order is important: update asteroids *including* dying animation first
         updateAsteroids(deltaTime);
         updateProjectiles(deltaTime);
         updatePlayerShip(deltaTime);
 
-        checkProjectileAsteroidCollisions(); // Check projectile hits first
+        // Collisions checked after updates
+        checkProjectileAsteroidCollisions();
 
         if (checkShipAsteroidCollision()) {
-          // Then check ship collision
           gameOver();
           return;
         }
@@ -750,7 +800,7 @@
       }
 
       window.addEventListener("resize", () => {
-        if (isGameOver) return;
+        // Allow resize even if game over, doesn't hurt
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
