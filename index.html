@@ -63,6 +63,7 @@
       const SPAWN_DISTANCE = 20;
       const DESPAWN_DISTANCE = 0;
       const MAX_ASTEROIDS = 50;
+      const MOVEMENT_RATIO = 2.0;
 
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById("c"),
@@ -92,25 +93,22 @@
       let targetShipPosition = new THREE.Vector3(0, -1, SHIP_DEPTH);
       const mouseNDC = new THREE.Vector2();
 
+      let isTouching = false;
+      let touchStartPos = new THREE.Vector2();
+      let touchStartShipPos = new THREE.Vector3();
+
       const loadingManager = new THREE.LoadingManager();
       const fbxLoader = new FBXLoader(loadingManager);
-      const textureLoader = new THREE.TextureLoader(loadingManager); // Added TextureLoader
+      const textureLoader = new THREE.TextureLoader(loadingManager);
       const instructionsDiv = document.getElementById("instructions");
       instructionsDiv.style.display = "block";
 
       const backgroundTexture = textureLoader.load(
-        "./assets/background.png", // Load the background image
+        "./assets/background.png",
         (texture) => {
-          scene.background = texture; // Set scene background on load
-          console.log("Background texture loaded!");
+          scene.background = texture;
         },
-        (xhr) => {
-          const percentLoaded = (xhr.loaded / xhr.total) * 100;
-          console.log(
-            `Background texture: ${Math.round(percentLoaded)}% loaded`
-          );
-          // Optionally update loading message for background too
-        },
+        (xhr) => {},
         (error) => {
           console.error("Error loading background texture:", error);
           instructionsDiv.innerText = `Error loading background: assets/background.png. Check path/file.`;
@@ -133,7 +131,6 @@
             SHIP_DEPTH
           );
           scene.add(playerShip);
-          console.log("Ship loaded!");
         },
         (xhr) => {
           const percentLoaded = (xhr.loaded / xhr.total) * 100;
@@ -142,7 +139,6 @@
               percentLoaded
             )}%`;
           }
-          console.log(percentLoaded + "% loaded");
         },
         (error) => {
           console.error("Error loading FBX model:", error);
@@ -153,9 +149,7 @@
       );
 
       loadingManager.onLoad = () => {
-        console.log("All assets loaded");
         if (!instructionsDiv.innerText.startsWith("Error")) {
-          // Hide only if no errors occurred
           instructionsDiv.style.display = "none";
         }
         setupInputListeners();
@@ -164,7 +158,6 @@
 
       loadingManager.onError = (url) => {
         console.error("There was an error loading " + url);
-        // Error messages are handled in individual loader error callbacks
       };
 
       function makeAsteroid() {
@@ -236,40 +229,29 @@
       }
 
       function setupInputListeners() {
-        window.addEventListener("mousemove", onPointerMove);
-        window.addEventListener("touchmove", onPointerMove, { passive: false });
-        window.addEventListener("touchstart", onPointerMove, {
-          passive: false,
-        });
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("touchstart", onTouchStart, { passive: false });
+        window.addEventListener("touchmove", onTouchMove, { passive: false });
+        window.addEventListener("touchend", onTouchEnd);
+        window.addEventListener("touchcancel", onTouchEnd);
       }
 
-      function onPointerMove(event) {
-        if (event.type.startsWith("touch")) {
-          event.preventDefault();
-        }
+      function screenToWorld(clientX, clientY) {
+        const screenNDC = new THREE.Vector2();
+        screenNDC.x = (clientX / window.innerWidth) * 2 - 1;
+        screenNDC.y = -(clientY / window.innerHeight) * 2 + 1;
 
-        let clientX, clientY;
-        if (event.touches && event.touches.length > 0) {
-          clientX = event.touches[0].clientX;
-          clientY = event.touches[0].clientY;
-        } else {
-          clientX = event.clientX;
-          clientY = event.clientY;
-        }
-
-        mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
-        mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
-
-        const vector = new THREE.Vector3(mouseNDC.x, mouseNDC.y, 0.5);
+        const vector = new THREE.Vector3(screenNDC.x, screenNDC.y, 0.5);
         vector.unproject(camera);
 
         const dir = vector.sub(camera.position).normalize();
         const distance = (SHIP_DEPTH - camera.position.z) / dir.z;
+        const worldPos = new THREE.Vector3();
+        worldPos.copy(camera.position).add(dir.multiplyScalar(distance));
+        return worldPos;
+      }
 
-        targetShipPosition
-          .copy(camera.position)
-          .add(dir.multiplyScalar(distance));
-
+      function clampTargetShipPosition() {
         const visibleHeight =
           2 *
           Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
@@ -287,6 +269,69 @@
           visibleHeight / 2.2
         );
         targetShipPosition.z = SHIP_DEPTH;
+      }
+
+      function updateTargetPositionFromScreenCoords(clientX, clientY) {
+        mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
+        mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+
+        const vector = new THREE.Vector3(mouseNDC.x, mouseNDC.y, 0.5);
+        vector.unproject(camera);
+
+        const dir = vector.sub(camera.position).normalize();
+        const distance = (SHIP_DEPTH - camera.position.z) / dir.z;
+
+        targetShipPosition
+          .copy(camera.position)
+          .add(dir.multiplyScalar(distance));
+
+        clampTargetShipPosition();
+      }
+
+      function onMouseMove(event) {
+        updateTargetPositionFromScreenCoords(event.clientX, event.clientY);
+      }
+
+      function onTouchStart(event) {
+        event.preventDefault();
+        if (event.touches.length > 0 && !isTouching) {
+          isTouching = true;
+          const touch = event.touches[0];
+          touchStartPos.set(touch.clientX, touch.clientY);
+          if (playerShip) {
+            touchStartShipPos.copy(playerShip.position);
+          } else {
+            touchStartShipPos.copy(targetShipPosition);
+          }
+        }
+      }
+
+      function onTouchMove(event) {
+        event.preventDefault();
+        if (!isTouching || event.touches.length === 0) return;
+
+        const touch = event.touches[0];
+        const currentTouchPos = new THREE.Vector2(touch.clientX, touch.clientY);
+
+        const worldStartPos = screenToWorld(touchStartPos.x, touchStartPos.y);
+        const worldCurrentPos = screenToWorld(
+          currentTouchPos.x,
+          currentTouchPos.y
+        );
+
+        const worldDelta = worldCurrentPos.sub(worldStartPos);
+
+        targetShipPosition
+          .copy(touchStartShipPos)
+          .addScaledVector(worldDelta, MOVEMENT_RATIO);
+
+        clampTargetShipPosition();
+      }
+
+      function onTouchEnd(event) {
+        if (event.touches.length === 0) {
+          isTouching = false;
+        }
       }
 
       function spawnAsteroid() {
@@ -328,7 +373,6 @@
         for (let i = asteroids.length - 1; i >= 0; i--) {
           const asteroid = asteroids[i];
           if (!asteroid.userData || !asteroid.userData.velocity) {
-            console.warn("Asteroid missing userData or velocity", asteroid);
             continue;
           }
           const velocity = asteroid.userData.velocity;
