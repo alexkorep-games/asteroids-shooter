@@ -27,11 +27,14 @@
         background: rgba(0, 0, 0, 0.5);
         padding: 5px;
         border-radius: 3px;
+        /* Initially hidden, shown on error */
+        display: none;
       }
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
+    <div id="instructions">Loading assets...</div>
 
     <!-- ES-module Shims for older browser compatibility (optional but good practice) -->
     <script
@@ -56,17 +59,15 @@
       import { createNoise3D } from "simplex-noise";
 
       /* ---------- GAME CONSTANTS ---------- */
-      const ASTEROID_SPAWN_RATE = 0.8; // Asteroids per second
-      const ASTEROID_SPEED_MIN = 2.5;
-      const ASTEROID_SPEED_MAX = 5.0;
+      const ASTEROID_SPAWN_RATE = 12; // Asteroids per second
+      const ASTEROID_SPEED = 5.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const PLAYER_SMOOTHING = 0.08; // Lower values = smoother/slower follow
-      const SHIP_DEPTH = -2; // How far the ship is in front of the camera origin
-      const SPAWN_DISTANCE = 30; // How far away asteroids spawn
-      const DESPAWN_DISTANCE = -10; // How far behind the camera asteroids get removed
+      const SHIP_DEPTH = -2; // How far the ship is relative to the world origin (0,0,0)
+      const SPAWN_DISTANCE = 20; // How far away (negative Z) asteroids spawn relative to camera
+      const DESPAWN_DISTANCE = 10; // How far *past* the camera (positive Z) asteroids get removed
       const MAX_ASTEROIDS = 50;
-      const STAR_COUNT = 5000;
 
       /* ---------- CORE THREE.JS SETUP ---------- */
       const renderer = new THREE.WebGLRenderer({
@@ -83,11 +84,11 @@
         0.1,
         1000
       );
-      camera.position.z = 5; // Move camera back slightly
+      camera.position.z = 5; // Move camera back slightly from origin
 
       // --- Lighting ---
       scene.add(new THREE.AmbientLight(0xffffff, 1)); // Adjust 0.5 intensity (0.0 to 1.0+)
-      const dirLight = new THREE.DirectionalLight(0xffffff, 20.8);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 20.8); // Increased intensity to better match screenshot
       dirLight.position.set(5, 8, 7);
       scene.add(dirLight);
 
@@ -96,16 +97,20 @@
       /* ---------- GAME OBJECTS & STATE ---------- */
       let playerShip = null;
       const asteroids = [];
-      let targetShipPosition = new THREE.Vector3(0, -2, SHIP_DEPTH); // Initial target below center
+      let targetShipPosition = new THREE.Vector3(0, -1, SHIP_DEPTH); // Initial target slightly below center
       const mouseNDC = new THREE.Vector2(); // Normalized Device Coordinates (-1 to +1)
 
       /* ---------- ASSET LOADING ---------- */
       const loadingManager = new THREE.LoadingManager();
       const fbxLoader = new FBXLoader(loadingManager);
+      const instructionsDiv = document.getElementById("instructions");
+      instructionsDiv.style.display = "block"; // Show loading message
 
       // --- Load Spaceship ---
-      // *** MAKE SURE you unzipped the file and the FBX is here ***
-      const shipModelPath = "./assets/Galactic_Soarer_0504175114_texture.fbx"; // Adjust if filename differs after unzipping
+      // *** NOTE: Make sure the FBX file is accessible at this path ***
+      // You might need to host this file or adjust the path.
+      // If running locally, place the 'assets' folder next to your HTML file.
+      const shipModelPath = "./assets/Galactic_Soarer_0504175114_texture.fbx";
 
       fbxLoader.load(
         shipModelPath,
@@ -113,33 +118,47 @@
           playerShip = fbx;
           playerShip.scale.setScalar(0.008); // Scale might need adjustment
           playerShip.rotation.x = Math.PI * 0.05; // Slight tilt up
-          playerShip.position.set(0, -2, SHIP_DEPTH); // Initial position
+          playerShip.position.set(
+            targetShipPosition.x,
+            targetShipPosition.y,
+            SHIP_DEPTH
+          ); // Initial position
           scene.add(playerShip);
           console.log("Ship loaded!");
         },
         (xhr) => {
-          console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+          // Optional: Update loading progress
+          const percentLoaded = (xhr.loaded / xhr.total) * 100;
+          instructionsDiv.innerText = `Loading ship: ${Math.round(
+            percentLoaded
+          )}%`;
+          console.log(percentLoaded + "% loaded");
         },
         (error) => {
           console.error("Error loading FBX model:", error);
-          // Provide fallback or error message
-          document.getElementById(
-            "instructions"
-          ).innerText = `Error loading ship: ${shipModelPath}. Make sure it's unzipped and in the same folder.`;
-          document.getElementById("instructions").style.color = "red";
+          instructionsDiv.innerText = `Error loading ship: ${shipModelPath}. Check path and console.`;
+          instructionsDiv.style.color = "red";
+          // Keep the error message displayed
         }
       );
 
       loadingManager.onLoad = () => {
         console.log("All assets loaded");
+        instructionsDiv.style.display = "none"; // Hide instructions on successful load
         setupInputListeners();
-        animate();
+        animate(); // Start the game loop only after loading
       };
 
-      /* ---------- ASTEROID GENERATION (from original code, slightly modified) ---------- */
+      loadingManager.onError = (url) => {
+        console.error("There was an error loading " + url);
+        // Error message is already handled in the fbxLoader's error callback
+        // but you could add more generic handling here if needed.
+      };
+
+      /* ---------- ASTEROID GENERATION ---------- */
       function makeAsteroid() {
         const RADIUS = 1;
-        const SEGMENTS = 8; // Slightly more detail
+        const SEGMENTS = 8; // Low poly look
         const geometry = new THREE.SphereGeometry(RADIUS, SEGMENTS, SEGMENTS);
 
         const noise3D = createNoise3D();
@@ -148,7 +167,7 @@
 
         const OCTAVES = 3;
         const BASE_FREQ = 1.4;
-        const BASE_AMP = 0.18; // Slightly more bumpy
+        const BASE_AMP = 0.18; // Controls bumpiness
 
         for (let i = 0; i < posAttr.count; i++) {
           v.fromBufferAttribute(posAttr, i).normalize();
@@ -168,36 +187,39 @@
         geometry.computeVertexNormals();
 
         const mainMaterial = new THREE.MeshToonMaterial({
+          // Toon material for flat shaded look
           color: 0xdd44aa, // Pink color from screenshot
-          emissive: 0x110011, // Optional slight glow
-          flatShading: true,
+          emissive: 0x110011, // Slight emissive glow
+          flatShading: true, // Use flat shading explicitly with Toon
         });
         const mainAsteroid = new THREE.Mesh(geometry, mainMaterial);
 
-        // --- Outline (optional, but nice) ---
+        // --- Outline (optional, but helps the style) ---
         const outlineMaterial = new THREE.MeshBasicMaterial({
-          color: 0xffffff,
+          color: 0x220022, // Darker outline color
           side: THREE.BackSide,
         });
-        const outlineMesh = new THREE.Mesh(geometry.clone(), outlineMaterial); // Use CLONE for outline
-        const OUTLINE_SCALE = 1.06;
+        const outlineMesh = new THREE.Mesh(geometry.clone(), outlineMaterial);
+        const OUTLINE_SCALE = 1.06; // How thick the outline is
         outlineMesh.scale.set(OUTLINE_SCALE, OUTLINE_SCALE, OUTLINE_SCALE);
         mainAsteroid.add(outlineMesh); // Add outline as child
 
         // --- Game Data ---
-        const speed = THREE.MathUtils.randFloat(
-          ASTEROID_SPEED_MIN,
-          ASTEROID_SPEED_MAX
-        );
-        // Aim slightly towards the player's general area but with randomness
-        const targetX = THREE.MathUtils.randFloat(-2, 2);
-        const targetY = THREE.MathUtils.randFloat(-2, 2);
-        const velocity = new THREE.Vector3(targetX, targetY, -speed)
-          .normalize()
-          .multiplyScalar(speed);
+        const speed = ASTEROID_SPEED;
+
+        // ** CORRECTED VELOCITY CALCULATION **
+        // Calculate a direction vector aiming generally forward but with spread
+        // We want Z to be positive (moving towards camera at z=5 from spawn at z=-25)
+        const dirX = 0;
+        const dirY = 0;
+        const dirZ = 1.0; // Primarily move forward along Z
+
+        const velocity = new THREE.Vector3(dirX, dirY, dirZ)
+          .normalize() // Make it a unit direction vector
+          .multiplyScalar(speed); // Apply the random speed
 
         mainAsteroid.userData = {
-          velocity: velocity,
+          velocity: velocity, // Store the corrected velocity
           rotationSpeed: new THREE.Vector3(
             THREE.MathUtils.randFloat(-0.5, 0.5),
             THREE.MathUtils.randFloat(-0.5, 0.5),
@@ -237,20 +259,31 @@
         mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
 
         // Project NDC to world space at the ship's depth
-        const vector = new THREE.Vector3(mouseNDC.x, mouseNDC.y, 0.5); // z=0.5 is between near/far planes
-        vector.unproject(camera);
+        // Create a temporary vector for projection calculation
+        const vector = new THREE.Vector3(mouseNDC.x, mouseNDC.y, 0.5); // z=0.5 is arbitrary, between near/far
+        vector.unproject(camera); // Project from screen space to world space
+
+        // Calculate direction from camera to the unprojected point
         const dir = vector.sub(camera.position).normalize();
+
+        // Calculate distance along this direction to intersect the ship's Z-plane
         const distance = (SHIP_DEPTH - camera.position.z) / dir.z;
+
+        // Calculate the target world position on the ship's Z-plane
+        // Use a *copy* of camera position to avoid modifying it
         targetShipPosition
           .copy(camera.position)
           .add(dir.multiplyScalar(distance));
 
         // Optional: Clamp ship movement to screen edges (adjust bounds as needed)
+        // Calculate the visible size of the game area at the ship's depth
         const visibleHeight =
           2 *
           Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
-          Math.abs(SHIP_DEPTH - camera.position.z);
+          Math.abs(SHIP_DEPTH - camera.position.z); // Use abs distance from camera to ship plane
         const visibleWidth = visibleHeight * camera.aspect;
+
+        // Clamp the target position (adjust the divisor for padding)
         targetShipPosition.x = THREE.MathUtils.clamp(
           targetShipPosition.x,
           -visibleWidth / 2.2,
@@ -261,6 +294,8 @@
           -visibleHeight / 2.2,
           visibleHeight / 2.2
         );
+        // Ensure target Z stays at SHIP_DEPTH (important!)
+        targetShipPosition.z = SHIP_DEPTH;
       }
 
       /* ---------- GAME LOGIC ---------- */
@@ -269,17 +304,19 @@
 
         const asteroid = makeAsteroid();
 
-        // Calculate spawn position based on view frustum at SPAWN_DISTANCE
+        // Calculate spawn position based on view frustum at SPAWN_DISTANCE *behind* camera
+        const spawnZ = camera.position.z - SPAWN_DISTANCE; // e.g., 5 - 30 = -25
+
         const height =
           2 *
           Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
-          SPAWN_DISTANCE;
+          Math.abs(spawnZ - camera.position.z); // Distance from camera to spawn plane
         const width = height * camera.aspect;
 
         asteroid.position.set(
-          THREE.MathUtils.randFloatSpread(width * 1.2), // Spawn slightly outside view horizontally
-          THREE.MathUtils.randFloatSpread(height * 1.2), // Spawn slightly outside view vertically
-          camera.position.z - SPAWN_DISTANCE // Spawn distance in front of camera (further negative Z)
+          THREE.MathUtils.randFloatSpread(width * 0.2),
+          THREE.MathUtils.randFloatSpread(height * 0.2),
+          spawnZ // Spawn distance in front of camera (further negative Z)
         );
 
         const scale = THREE.MathUtils.randFloat(
@@ -301,24 +338,27 @@
       function updateAsteroids(deltaTime) {
         for (let i = asteroids.length - 1; i >= 0; i--) {
           const asteroid = asteroids[i];
+          // Check if userData and velocity exist before accessing
+          if (!asteroid.userData || !asteroid.userData.velocity) {
+            console.warn("Asteroid missing userData or velocity", asteroid);
+            continue; // Skip this asteroid if data is missing
+          }
           const velocity = asteroid.userData.velocity;
           const rotSpeed = asteroid.userData.rotationSpeed;
 
-          // Move
-          asteroid.position.x += velocity.x * deltaTime;
-          asteroid.position.y += velocity.y * deltaTime;
-          asteroid.position.z += velocity.z * deltaTime;
+          // Move based on velocity
+          asteroid.position.addScaledVector(velocity, deltaTime);
 
           // Rotate
           asteroid.rotation.x += rotSpeed.x * deltaTime;
           asteroid.rotation.y += rotSpeed.y * deltaTime;
           asteroid.rotation.z += rotSpeed.z * deltaTime;
 
-          // Despawn if behind camera
-          if (asteroid.position.z > camera.position.z - DESPAWN_DISTANCE) {
+          // Despawn if past camera + despawn distance
+          const despawnZ = camera.position.z + DESPAWN_DISTANCE; // e.g., 5 + 10 = 15
+          if (asteroid.position.z > despawnZ) {
+            // Make sure to remove outline which is a child
             scene.remove(asteroid);
-            // Make sure to remove outline if it wasn't a child (it is here, so this is safe)
-            // if (asteroid.children.length > 0) scene.remove(asteroid.children[0]);
             asteroids.splice(i, 1);
           }
         }
@@ -327,30 +367,37 @@
       function updatePlayerShip(deltaTime) {
         if (!playerShip) return; // Don't update if not loaded yet
 
-        // Smoothly move ship towards the target position
+        // Smoothly interpolate ship's current position towards the target position
         playerShip.position.lerp(targetShipPosition, PLAYER_SMOOTHING);
 
-        // Optional: Bank ship slightly based on horizontal movement
-        const bankAmount = (targetShipPosition.x - playerShip.position.x) * 0.5;
-        const tiltAmount = (targetShipPosition.y - playerShip.position.y) * 0.2;
-        // Smooth rotation lerping looks better
-        const targetQuaternion = new THREE.Quaternion();
-        // Base rotation + bank + tilt
-        const baseRotationX = Math.PI * 0.05; // Keep the slight up-tilt
-        targetQuaternion.setFromEuler(
-          new THREE.Euler(baseRotationX - tiltAmount, 0, -bankAmount, "XYZ")
-        );
-        playerShip.quaternion.slerp(targetQuaternion, PLAYER_SMOOTHING * 2); // Rotate slightly faster than position
+        // Optional: Bank ship slightly based on horizontal movement difference
+        const bankAmount = (targetShipPosition.x - playerShip.position.x) * 0.5; // Banking factor
+        // Optional: Tilt ship slightly based on vertical movement difference
+        const tiltAmount = (targetShipPosition.y - playerShip.position.y) * 0.2; // Tilting factor
 
-        // playerShip.rotation.z = -bankAmount;
-        // playerShip.rotation.x = baseRotationX - tiltAmount;
+        // Smooth rotation lerping looks better than setting directly
+        const targetQuaternion = new THREE.Quaternion();
+        const baseRotationX = Math.PI * 0.05; // Keep the slight default up-tilt
+
+        // Create target Euler rotation (order matters: YXZ or XYZ often used for aircraft)
+        // Z-rotation (roll/bank), X-rotation (pitch/tilt), Y-rotation (yaw - usually zero here)
+        const targetEuler = new THREE.Euler(
+          baseRotationX - tiltAmount,
+          0,
+          -bankAmount,
+          "XYZ"
+        );
+        targetQuaternion.setFromEuler(targetEuler);
+
+        // Spherically interpolate the ship's current quaternion towards the target quaternion
+        playerShip.quaternion.slerp(targetQuaternion, PLAYER_SMOOTHING * 1.5); // Rotate slightly faster than position lerp
       }
 
       /* ---------- RENDER LOOP ---------- */
-      let timeToNextSpawn = 0;
+      let timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE; // Start ready to spawn
 
       function animate() {
-        requestAnimationFrame(animate);
+        requestAnimationFrame(animate); // Loop animation
 
         const deltaTime = clock.getDelta();
 
@@ -363,7 +410,7 @@
 
         // --- Update game objects ---
         updateAsteroids(deltaTime);
-        updatePlayerShip(deltaTime); // Update player ship movement
+        updatePlayerShip(deltaTime); // Update player ship movement and rotation
 
         // --- Render scene ---
         renderer.render(scene, camera);
@@ -374,13 +421,14 @@
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        // Clamping bounds in onPointerMove will automatically adjust due to camera.aspect change
       });
 
-      // Initial setup check
-      if (!window.WebGLRenderingContext) {
-        document.getElementById("instructions").innerText =
-          "WebGL is not supported by your browser!";
-        document.getElementById("instructions").style.color = "red";
+      // Initial check for WebGL support
+      if (!renderer.getContext()) {
+        instructionsDiv.innerText = "WebGL is not supported by your browser!";
+        instructionsDiv.style.color = "red";
+        instructionsDiv.style.display = "block"; // Ensure it's visible
       }
     </script>
   </body>
