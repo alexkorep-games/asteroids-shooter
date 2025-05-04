@@ -96,11 +96,11 @@
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const ASTEROID_BASE_RADIUS = 1.0;
-      const SPAWN_AREA_WIDTH_RATIO = 0.4;
+      const SPAWN_AREA_WIDTH_RATIO = 0.1;
 
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
-      const SPAWN_DISTANCE = 20;
+      const SPAWN_DISTANCE = 140;
       const DESPAWN_DISTANCE = 0;
       const MAX_ASTEROIDS = 50;
       const MOVEMENT_RATIO = 2.0;
@@ -110,7 +110,7 @@
       const PROJECTILE_RADIUS = 0.1;
       const SHOT_COOLDOWN = 0.15;
       const MAX_PROJECTILES = 30;
-      const PROJECTILE_DESPAWN_Z = -30;
+      const PROJECTILE_DESPAWN_Z = -130;
 
       const ASTEROID_DESTRUCTION_DURATION = 0.2; // Duration for shrink animation
       const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff); // White flash
@@ -455,6 +455,7 @@
 
         const spawnZ = camera.position.z - SPAWN_DISTANCE;
 
+        // TODO base it on the screen size
         const height =
           2 *
           Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
