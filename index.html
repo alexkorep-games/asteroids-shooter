@@ -330,6 +330,8 @@
       const MAX_PROJECTILES = 30;
       const PROJECTILE_DESPAWN_Z = -130;
 
+      const INVULNERABILITY_FLASH_INTERVAL = 0.1; // Blink every 0.1 seconds
+
       // --- Three.js Setup ---
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById("c"),
@@ -376,9 +378,9 @@
       let totalAsteroidsSpawned = 0;
       let isInvulnerable = false;
       let invulnerabilityTimer = 0;
-      let shipFlashToggle = false;
       let shipOriginalMaterial = null;
       let asteroidSpeed = INITIAL_ASTEROID_SPEED;
+      let timeSinceLastFlash = 0; // Timer for flash interval
 
       // --- DOM Elements ---
       const instructionsDiv = document.getElementById("instructions");
@@ -963,17 +965,23 @@
         // Handle invulnerability flashing
         if (isInvulnerable) {
           invulnerabilityTimer -= deltaTime;
-          // Flash every ~0.1 seconds
-          shipFlashToggle = !shipFlashToggle;
-          playerShip.visible = shipFlashToggle; // Toggle visibility for flashing
+          timeSinceLastFlash += deltaTime; // Accumulate time since last flash
 
+          // Check if it's time to toggle visibility
+          if (timeSinceLastFlash >= INVULNERABILITY_FLASH_INTERVAL) {
+            playerShip.visible = !playerShip.visible; // Toggle visibility
+            timeSinceLastFlash = 0; // Reset the flash timer (or timeSinceLastFlash -= INVULNERABILITY_FLASH_INTERVAL for slightly more accuracy)
+          }
+
+          // Check if invulnerability has ended
           if (invulnerabilityTimer <= 0) {
             isInvulnerable = false;
             playerShip.visible = true; // Ensure ship is visible at the end
+            timeSinceLastFlash = 0; // Reset timer just in case
           }
         } else {
-          if (playerShip && !playerShip.visible) {
-            playerShip.visible = true; // Ensure visible if not invulnerable
+          if (!playerShip.visible) {
+            playerShip.visible = true;
           }
         }
       }
@@ -1001,7 +1009,8 @@
             playerHealth -= SHIP_COLLISION_DAMAGE;
             isInvulnerable = true;
             invulnerabilityTimer = INVULNERABILITY_DURATION;
-            shipFlashToggle = false; // Start flashing cycle
+            playerShip.visible = true; // Ensure visible when invulnerability starts
+            timeSinceLastFlash = 0; // Reset flash timer
 
             // Destroy the asteroid that hit the player
             markAsteroidAsDying(asteroid); // This also increments counter and updates UI
