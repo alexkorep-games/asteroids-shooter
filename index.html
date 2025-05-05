@@ -18,14 +18,15 @@
       canvas {
         display: block; /* Default, might be hidden initially */
       }
-      #loginScreen {
+      /* --- Start Screen Styles --- */
+      #startScreen {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
         background-color: #000; /* Match body background */
-        display: flex;
+        display: flex; /* Initially shown */
         flex-direction: column;
         justify-content: center;
         align-items: center;
@@ -34,41 +35,90 @@
         padding: 20px;
         box-sizing: border-box;
       }
-      #loginScreen h1 {
+      #startScreen h1 {
         font-size: 2.5em;
         margin-bottom: 30px;
         color: #0f0; /* Greenish title */
       }
-      #loginButton {
+      #startScreen button {
+        /* General button styling for start screen */
         padding: 15px 30px;
         font-size: 1.5em;
         cursor: pointer;
         border: 2px solid #ccc;
         border-radius: 5px;
-        background-color: #4285f4; /* Google Blue */
         color: white;
         font-family: "Consolas", "Courier New", monospace;
         transition: background-color 0.2s;
-        display: flex;
+        margin-top: 20px; /* Spacing between buttons/elements */
+      }
+      #startScreen #loginButton {
+        /* Specific styling if needed, inherits general */
+        background-color: #4285f4; /* Google Blue */
+        display: flex; /* Keep icon layout */
         align-items: center;
         gap: 10px; /* Space between icon and text */
       }
-      #loginButton:hover {
+      #startScreen #loginButton:hover {
         background-color: #357ae8;
       }
-      #loginButton img {
+      #startScreen #startGameButton {
+        background-color: #4caf50; /* Green */
+      }
+      #startScreen #startGameButton:hover {
+        background-color: #45a049;
+      }
+      #startScreen #logoutButton {
+        background-color: #f44336; /* Red */
+        font-size: 1.2em; /* Slightly smaller */
+        padding: 10px 20px;
+      }
+      #startScreen #logoutButton:hover {
+        background-color: #da190b;
+      }
+      #startScreen #loginButton img,
+      #startScreen #loginButton svg {
         /* Style for Google icon */
         width: 24px;
         height: 24px;
       }
-      #loginError {
+      #startScreen #userInfo {
+        font-size: 1.2em;
+        margin-bottom: 15px;
+        color: #eee;
+      }
+      #startScreen #startScoreDisplay {
+        font-size: 1.4em;
+        margin-bottom: 20px;
+        color: #0f0; /* Match title color */
+      }
+      #startScreen #loginError {
         margin-top: 20px;
         color: #ff4d4d; /* Red error text */
         font-size: 1.1em;
         display: none; /* Hidden by default */
       }
 
-      /* Game elements initially hidden */
+      /* --- Login Screen (Now Hidden by default, functionality moved to Start Screen) --- */
+      #loginScreen {
+        /* display: none; */ /* Hide original login screen, replaced by startScreen */
+        /* Keep styles if needed for reference or fallback, but hide it */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+        display: none; /* Hide this element */
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 99;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      /* --- Game elements initially hidden --- */
       #c,
       #hud,
       #speedIndicator,
@@ -77,7 +127,7 @@
       #gameOverScreen {
         display: none;
       }
-      /* Ensure cursor is default on login, managed later */
+      /* Ensure cursor is default on start/game over, managed later */
       body.game-active {
         cursor: none;
       }
@@ -261,11 +311,16 @@
     </style>
   </head>
   <body>
-    <!-- Login Screen -->
-    <div id="loginScreen">
+    <!-- Start Screen (Replaces Login Screen) -->
+    <div id="startScreen">
       <h1>Asteroid Shooter</h1>
-      <button id="loginButton">
-        <!-- Simple Google Icon SVG (replace with img if preferred) -->
+      <div id="userInfo" style="display: none"></div>
+      <!-- Placeholder for Welcome msg -->
+      <div id="startScoreDisplay" style="display: none">Score: 0</div>
+      <!-- Placeholder for start score -->
+
+      <!-- Login Button (shown when logged out) -->
+      <button id="loginButton" style="display: none">
         <svg
           version="1.1"
           xmlns="http://www.w3.org/2000/svg"
@@ -295,8 +350,20 @@
         </svg>
         Sign in with Google
       </button>
-      <div id="loginError"></div>
-      <!-- To show login errors -->
+
+      <!-- Start Game Button (shown when logged in) -->
+      <button id="startGameButton" style="display: none">Start Game</button>
+
+      <!-- Logout Button (shown when logged in) -->
+      <button id="logoutButton" style="display: none">Log Out</button>
+
+      <!-- Login Error Display -->
+      <div id="loginError" style="display: none"></div>
+    </div>
+
+    <!-- Login Screen (Original - Hidden, kept for reference if needed) -->
+    <div id="loginScreen">
+      <!-- Content moved or replaced by startScreen -->
     </div>
 
     <!-- Game Canvas -->
@@ -310,7 +377,7 @@
           <div id="healthBarInner"></div>
         </div>
       </div>
-      <!-- Maybe add a welcome message/logout button here later -->
+      <!-- Welcome message/logout moved to start screen -->
     </div>
     <div id="speedIndicator">🚀 0.0 m/sec</div>
     <div id="asteroidCounter">0 / 0 ☄️</div>
@@ -378,7 +445,7 @@
 
       // --- Firebase Configuration ---
       const firebaseConfig = {
-        apiKey: "AIzaSyBoO3ZOL4QqxxtcyT4UDK9F09VjjBqXCQA",
+        apiKey: "AIzaSyBoO3ZOL4QqxxtcyT4UDK9F09VjjBqXCQA", // DO NOT HARDCODE KEYS IN PRODUCTION - use environment variables or server-side handling
         authDomain: "retroglide.firebaseapp.com",
         databaseURL:
           "https://retroglide-default-rtdb.europe-west1.firebasedatabase.app",
@@ -406,11 +473,13 @@
         console.log("Firebase initialized successfully.");
       } catch (error) {
         console.error("Firebase initialization failed:", error);
-        // Show error on login screen maybe?
+        // Show error on start screen maybe?
         const loginErrorDiv = document.getElementById("loginError");
-        if (loginErrorDiv)
+        if (loginErrorDiv) {
           loginErrorDiv.textContent =
             "Firebase initialization failed. High scores unavailable.";
+          loginErrorDiv.style.display = "block"; // Show error on start screen
+        }
         database = null;
         auth = null;
       }
@@ -477,7 +546,7 @@
       let touchStartShipPos = new THREE.Vector3();
       let timeSinceLastShot = 0;
       let timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
-      let isGameOver = false;
+      let isGameOver = true; // Start in a non-game state
       let animationFrameId = null;
       let shipBoundingSphere = null;
       let playerHealth = SHIP_INITIAL_HEALTH;
@@ -489,11 +558,17 @@
       let asteroidSpeed = INITIAL_ASTEROID_SPEED;
       let timeSinceLastFlash = 0;
       let gameInitialized = false; // Flag to prevent multiple initializations
+      let assetsLoaded = false; // Flag to track asset loading status
 
       // --- DOM Elements ---
-      const loginScreen = document.getElementById("loginScreen");
+      // const loginScreen = document.getElementById("loginScreen"); // No longer primary screen
+      const startScreen = document.getElementById("startScreen");
+      const userInfoDiv = document.getElementById("userInfo");
+      const startScoreDisplayDiv = document.getElementById("startScoreDisplay");
       const loginButton = document.getElementById("loginButton");
-      const loginErrorDiv = document.getElementById("loginError");
+      const startGameButton = document.getElementById("startGameButton");
+      const logoutButton = document.getElementById("logoutButton");
+      const loginErrorDiv = document.getElementById("loginError"); // Error display within startScreen
       const instructionsDiv = document.getElementById("instructions");
       const gameOverScreen = document.getElementById("gameOverScreen");
       const restartButton = document.getElementById("restartButton");
@@ -530,8 +605,43 @@
         }
       };
 
+      // Function to handle Sign-Out
+      const logOut = async () => {
+        if (!auth) {
+          console.error("Auth service not available for logout.");
+          return;
+        }
+        try {
+          await signOut(auth);
+          // This will trigger onAuthStateChanged
+          console.log("Sign-out initiated.");
+        } catch (error) {
+          console.error("Sign-out error:", error);
+          loginErrorDiv.textContent = `Logout failed: ${error.message}`;
+          loginErrorDiv.style.display = "block";
+        }
+      };
+
       // Listen for Authentication State Changes
       onAuthStateChanged(auth, (user) => {
+        // Always ensure start screen is visible initially when auth state changes
+        startScreen.style.display = "flex";
+        // Hide game elements when auth state changes, until game is started
+        canvas.style.display = "none";
+        hud.style.display = "none";
+        speedIndicator.style.display = "none";
+        asteroidCounter.style.display = "none";
+        gameOverScreen.style.display = "none"; // Hide game over if showing
+        instructionsDiv.style.display = "none"; // Hide instructions
+        document.body.classList.remove("game-active"); // Use default cursor
+
+        // Stop the game loop if it's running
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+        isGameOver = true; // Treat auth change as needing a fresh start
+
         if (user) {
           // User is signed in
           currentUser = user;
@@ -540,61 +650,69 @@
             currentUser.displayName,
             currentUser.uid
           );
-          loginScreen.style.display = "none"; // Hide login
-          // Show game elements
-          canvas.style.display = "block";
-          hud.style.display = "flex"; // Use flex for layout
-          speedIndicator.style.display = "block";
-          asteroidCounter.style.display = "block";
-          document.body.classList.add("game-active"); // Enable custom cursor etc.
+
+          // Update Start Screen for logged-in user
+          userInfoDiv.textContent = `Welcome, ${
+            currentUser.displayName || "Player"
+          }!`;
+          userInfoDiv.style.display = "block";
+          startScoreDisplayDiv.textContent = `Destroyed: 0`; // Show initial score 0
+          startScoreDisplayDiv.style.display = "block";
+          loginButton.style.display = "none";
+          logoutButton.style.display = "block"; // Show logout
+          startGameButton.style.display = "block"; // Show start game
+          startGameButton.disabled = !assetsLoaded; // Enable start only if assets are loaded
+          loginErrorDiv.style.display = "none"; // Hide errors
 
           // Initialize game assets ONLY if not already done
           if (!gameInitialized) {
-            initializeGameAssets();
+            initializeGameAssets(); // Will set assetsLoaded flag on completion
           } else {
-            // If assets are loaded, maybe just ensure the game starts if it was stopped
-            if (isGameOver) {
-              // If returning after game over, maybe just stay on game over screen
-              // Or potentially call restartGame() here if you want auto-restart on re-login
-            } else if (!animationFrameId) {
-              // If game wasn't running, start it
-              startGame();
-            }
+            startGameButton.disabled = !assetsLoaded; // Ensure button state is correct
           }
         } else {
           // User is signed out
           currentUser = null;
           console.log("User logged out.");
-          loginScreen.style.display = "flex"; // Show login
-          // Hide game elements
-          canvas.style.display = "none";
-          hud.style.display = "none";
-          speedIndicator.style.display = "none";
-          asteroidCounter.style.display = "none";
-          gameOverScreen.style.display = "none"; // Hide game over if showing
-          instructionsDiv.style.display = "none"; // Hide instructions
-          document.body.classList.remove("game-active"); // Use default cursor
 
-          // Stop the game loop if it's running
-          if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-          }
-          // Optional: Reset game state completely on logout
-          // resetFullGameState(); // You'd need to create this function
-          isGameOver = true; // Treat logout similar to game over to prevent auto-restart issues
-          gameInitialized = false; // Allow re-initialization on next login
+          // Update Start Screen for logged-out user
+          userInfoDiv.style.display = "none";
+          startScoreDisplayDiv.style.display = "none";
+          loginButton.style.display = "flex"; // Show login button (use flex for icon)
+          logoutButton.style.display = "none";
+          startGameButton.style.display = "none";
+          // loginErrorDiv might still be shown if there was a logout error etc.
+
+          // Optional: Reset game state completely on logout (already handled by setting isGameOver = true)
+          // gameInitialized = false; // Maybe allow re-init if assets need refresh? Let's keep them loaded.
+          assetsLoaded = false; // Assets are loaded, but user needs to log in and THEN start
         }
       });
 
       // Attach login function to button
       loginButton.addEventListener("click", loginWithGoogle);
+      // Attach logout function to button
+      logoutButton.addEventListener("click", logOut);
+      // Attach start game function to button
+      startGameButton.addEventListener("click", () => {
+        startScreen.style.display = "none"; // Hide start screen
+        // Show game elements
+        canvas.style.display = "block";
+        hud.style.display = "flex"; // Use flex for layout
+        speedIndicator.style.display = "block";
+        asteroidCounter.style.display = "block";
+        document.body.classList.add("game-active"); // Enable custom cursor etc.
+
+        restartGame(); // Reset state and start the animation loop
+      });
 
       // --- Initialization ---
       // Moved asset loading logic into a function called by onAuthStateChanged
       function initializeGameAssets() {
         if (gameInitialized) return; // Prevent double initialization
         gameInitialized = true;
+        assetsLoaded = false; // Mark assets as not loaded yet
+        startGameButton.disabled = true; // Disable button while loading
 
         instructionsDiv.style.display = "block";
         instructionsDiv.textContent = "Loading assets...";
@@ -660,15 +778,23 @@
           if (!instructionsDiv.innerText.startsWith("Error")) {
             instructionsDiv.style.display = "none";
           }
+          assetsLoaded = true; // Mark assets as loaded
+          // Enable start button only if user is logged in at this point
+          if (currentUser) {
+            startGameButton.disabled = false;
+          }
           setupInputListeners();
-          restartButton.addEventListener("click", restartGame);
-          startGame(); // Start the game loop *after* loading and login
+          restartButton.addEventListener("click", restartGame); // Add listener for game over screen restart
+          // DO NOT start game loop here automatically
+          console.log("Assets loaded successfully.");
         };
 
         loadingManager.onError = (url) => {
           console.error("There was an error loading " + url);
           instructionsDiv.innerText = `Error loading: ${url}. Check console.`;
           instructionsDiv.style.color = "red";
+          assetsLoaded = false; // Mark as failed
+          startGameButton.disabled = true; // Ensure button stays disabled
         };
       }
 
@@ -831,7 +957,7 @@
 
         const velocity = new THREE.Vector3(0, 0, 1)
           .normalize()
-          .multiplyScalar(asteroidSpeed);
+          .multiplyScalar(asteroidSpeed); // Use current asteroidSpeed
 
         mainAsteroid.userData = {
           ...mainAsteroid.userData,
@@ -871,14 +997,20 @@
 
         // Increment counter only when an asteroid is marked for dying
         asteroidsDestroyed++;
-        updateSpeed();
-        updateUI(); // Update the counter display
+        updateSpeed(); // Adjust speed for future asteroids
+        updateUI(); // Update the counter display and potentially start screen score display
       }
 
       function updateSpeed() {
         // Increase speed based on the number of asteroids destroyed
         asteroidSpeed = INITIAL_ASTEROID_SPEED + asteroidsDestroyed * 1.5;
         // Update velocity for NEWLY spawned asteroids (existing ones keep their speed)
+        // Also update UI speed indicator
+        if (speedIndicatorDisplay.style.display !== "none") {
+          speedIndicatorDisplay.textContent = `🚀 ${asteroidSpeed.toFixed(
+            1
+          )} m/sec`;
+        }
       }
 
       function disposeObject(obj) {
@@ -904,24 +1036,31 @@
       }
 
       function updateUI() {
-        // Update Health Bar
-        const healthPercentage = Math.max(0, playerHealth); // Clamp at 0
-        healthBarInner.style.width = healthPercentage + "%";
+        // Update Health Bar (only if HUD is visible)
+        if (hud.style.display !== "none") {
+          const healthPercentage = Math.max(0, playerHealth); // Clamp at 0
+          healthBarInner.style.width = healthPercentage + "%";
 
-        if (healthPercentage <= 25) {
-          healthBarInner.style.backgroundColor = "#ff4d4d"; // Red
-        } else if (healthPercentage <= 50) {
-          healthBarInner.style.backgroundColor = "#ffcc00"; // Yellow
-        } else {
-          healthBarInner.style.backgroundColor = "#4CAF50"; // Green
+          if (healthPercentage <= 25) {
+            healthBarInner.style.backgroundColor = "#ff4d4d"; // Red
+          } else if (healthPercentage <= 50) {
+            healthBarInner.style.backgroundColor = "#ffcc00"; // Yellow
+          } else {
+            healthBarInner.style.backgroundColor = "#4CAF50"; // Green
+          }
         }
 
-        // Update Asteroid Counter
-        asteroidCounterDisplay.textContent = `${asteroidsDestroyed}/${totalAsteroidsSpawned} ☄️`;
-        // Update Speed Indicator
-        speedIndicatorDisplay.textContent = `🚀 ${asteroidSpeed.toFixed(
-          1
-        )} m/sec`;
+        // Update Asteroid Counter (only if visible)
+        if (asteroidCounterDisplay.style.display !== "none") {
+          asteroidCounterDisplay.textContent = `${asteroidsDestroyed}/${totalAsteroidsSpawned} ☄️`;
+        }
+        // Update Speed Indicator (called within updateSpeed)
+        // updateSpeed(); // Call here or ensure it's called whenever speed might change
+
+        // Update Start Screen Score Display (only if visible)
+        if (startScreen.style.display !== "none") {
+          startScoreDisplayDiv.textContent = `Destroyed: ${asteroidsDestroyed}`;
+        }
       }
 
       // --- Input Handling ---
@@ -984,7 +1123,7 @@
         clampTargetShipPosition();
       }
       function onMouseMove(event) {
-        if (isGameOver || !currentUser) return; // Also check if logged in
+        if (isGameOver || !currentUser) return; // Also check if logged in & game active
         updateTargetPositionFromScreenCoords(event.clientX, event.clientY);
       }
       function onMouseDown(event) {
@@ -1044,10 +1183,10 @@
 
       // --- Spawning ---
       function spawnAsteroid() {
-        if (asteroids.length >= MAX_ASTEROIDS) return;
+        if (isGameOver || asteroids.length >= MAX_ASTEROIDS) return; // Don't spawn if game over
         const asteroid = makeAsteroid();
         totalAsteroidsSpawned++;
-        updateUI();
+        updateUI(); // Update total spawned count
         const spawnZ = camera.position.z - SPAWN_DISTANCE;
         const height = getVisibleHeight() / 2.2;
         const width = getVisibleWidth() / 2.2;
@@ -1072,7 +1211,8 @@
         asteroids.push(asteroid);
       }
       function spawnProjectile() {
-        if (!playerShip || projectiles.length >= MAX_PROJECTILES) return;
+        if (isGameOver || !playerShip || projectiles.length >= MAX_PROJECTILES)
+          return; // Don't spawn if game over
         const projectile = new THREE.Mesh(
           projectileGeometry,
           projectileMaterial
@@ -1092,6 +1232,7 @@
 
       // --- Update Functions ---
       function updateAsteroids(deltaTime) {
+        if (isGameOver) return; // Don't update if game over
         for (let i = asteroids.length - 1; i >= 0; i--) {
           const asteroid = asteroids[i];
           if (asteroid.userData.isDying) {
@@ -1133,6 +1274,7 @@
         }
       }
       function updateProjectiles(deltaTime) {
+        if (isGameOver) return; // Don't update if game over
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const projectile = projectiles[i];
           if (!projectile.userData || !projectile.userData.velocity) {
@@ -1150,7 +1292,7 @@
         }
       }
       function updatePlayerShip(deltaTime) {
-        if (!playerShip) return;
+        if (isGameOver || !playerShip) return; // Don't update if game over
         playerShip.position.lerp(targetShipPosition, PLAYER_SMOOTHING);
         if (shipBoundingSphere)
           shipBoundingSphere.center.copy(playerShip.position);
@@ -1242,7 +1384,7 @@
       }
 
       function checkProjectileAsteroidCollisions() {
-        if (!currentUser) return; // Don't check if logged out
+        if (isGameOver || !currentUser) return; // Don't check if logged out or game over
 
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const projectile = projectiles[i];
@@ -1282,26 +1424,44 @@
         animationFrameId = null; // Important: clear the ID
 
         finalScoreDisplay.textContent = `Final Score: ${asteroidsDestroyed}`;
-        gameOverScreen.style.display = "flex";
+        gameOverScreen.style.display = "flex"; // Show game over screen
+        // Hide game elements except game over screen
+        canvas.style.display = "none";
+        hud.style.display = "none";
+        speedIndicator.style.display = "none";
+        asteroidCounter.style.display = "none";
         document.body.classList.remove("game-active"); // Show default cursor
 
-        if (playerShip) playerShip.visible = true; // Ensure ship is visible
+        if (playerShip) playerShip.visible = true; // Ensure ship is visible if it exists
 
         // Attempt to save score (checks internally if user is logged in) and display leaderboard
         saveHighScore(asteroidsDestroyed);
-        fetchAndDisplayHighScores();
+        fetchAndDisplayHighScores(); // Fetch scores for the game over screen
       }
 
       function restartGame() {
-        if (!currentUser) {
-          console.log("Cannot restart, user not logged in.");
-          // Optionally show login screen again or display a message
+        // This function is called from the Start Game button AND the Restart button on Game Over screen
+        if (!currentUser || !assetsLoaded) {
+          console.log(
+            "Cannot start/restart: User not logged in or assets not loaded."
+          );
+          // If called from game over, maybe show start screen again?
+          gameOverScreen.style.display = "none";
+          startScreen.style.display = "flex"; // Go back to start screen
           return;
         }
-        isGameOver = false;
+
+        console.log("Restarting game...");
+        isGameOver = false; // Mark game as active
         isShooting = false;
-        gameOverScreen.style.display = "none";
+        gameOverScreen.style.display = "none"; // Hide game over screen if visible
+        startScreen.style.display = "none"; // Ensure start screen is hidden
         document.body.classList.add("game-active"); // Hide cursor again
+        // Show necessary game elements
+        canvas.style.display = "block";
+        hud.style.display = "flex";
+        speedIndicator.style.display = "block";
+        asteroidCounter.style.display = "block";
 
         targetShipPosition.set(0, -1, SHIP_DEPTH);
         if (playerShip) {
@@ -1327,29 +1487,36 @@
         invulnerabilityTimer = 0;
         asteroidSpeed = INITIAL_ASTEROID_SPEED;
 
-        updateUI();
+        updateUI(); // Reset UI elements (health, score counts)
+        updateSpeed(); // Reset speed indicator based on initial speed
+
         startGame(); // Start the animation loop again
       }
 
       function startGame() {
-        if (!currentUser || isGameOver || animationFrameId) {
+        // This function only starts the animation loop. State reset happens in restartGame.
+        if (!currentUser || isGameOver || animationFrameId || !assetsLoaded) {
           console.log(
-            "Start conditions not met (logged in? game over? already running?)"
+            "Start conditions not met (logged in?, game over?, already running?, assets loaded?)"
           );
-          return; // Don't start if not logged in, game is over, or loop already running
+          return; // Don't start if not ready
         }
         console.log("Starting game loop");
-        isGameOver = false; // Ensure game isn't marked as over
-        isShooting = false;
-        document.body.classList.add("game-active"); // Hide cursor
-        updateUI();
+        // isGameOver should be false already from restartGame
+        // isShooting should be false already from restartGame
+        // UI elements should be visible from restartGame
+        // document.body.classList.add("game-active"); // Already done in restartGame
+        // updateUI(); // Already done in restartGame
         animate(); // Start the loop
       }
 
       function animate() {
-        // Stop if game over or user logs out
-        if (isGameOver || !currentUser) {
-          console.log("Animation loop stopping.");
+        // Stop if game over or user logs out or assets not loaded
+        if (isGameOver || !currentUser || !assetsLoaded) {
+          console.log(
+            "Animation loop stopping (isGameOver/!currentUser/!assetsLoaded)."
+          );
+          if (animationFrameId) cancelAnimationFrame(animationFrameId); // Ensure cancellation
           animationFrameId = null; // Clear ID if stopped
           return;
         }
@@ -1390,14 +1557,16 @@
 
       // Initial WebGL check (optional but good)
       if (!renderer.getContext()) {
-        loginScreen.innerHTML =
+        startScreen.innerHTML = // Update start screen with error
           "<h1>Error</h1><p>WebGL is not supported by your browser!</p>";
-        loginScreen.style.display = "flex";
+        startScreen.style.display = "flex";
         // Hide everything else potentially?
       }
 
-      // NOTE: Game initialization (asset loading and start) is now triggered by
+      // NOTE: Game initialization (asset loading) is now triggered by
       // the onAuthStateChanged listener after a successful login.
+      // The game START (animation loop) is triggered by the "Start Game" button click.
+      // The initial UI state (showing start screen) is handled by CSS and the onAuthStateChanged listener.
     </script>
   </body>
 </html>
