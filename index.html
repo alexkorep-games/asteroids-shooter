@@ -11,13 +11,81 @@
       body {
         margin: 0;
         overflow: hidden;
-        /* cursor: none; /* Manage cursor visibility in JS */
         font-family: "Consolas", "Courier New", monospace; /* Pixel-like font */
         background-color: #000; /* Ensure body bg for contrast */
+        color: white; /* Default text color */
       }
       canvas {
-        display: block;
+        display: block; /* Default, might be hidden initially */
       }
+      #loginScreen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000; /* Match body background */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 100; /* Above everything else */
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      #loginScreen h1 {
+        font-size: 2.5em;
+        margin-bottom: 30px;
+        color: #0f0; /* Greenish title */
+      }
+      #loginButton {
+        padding: 15px 30px;
+        font-size: 1.5em;
+        cursor: pointer;
+        border: 2px solid #ccc;
+        border-radius: 5px;
+        background-color: #4285f4; /* Google Blue */
+        color: white;
+        font-family: "Consolas", "Courier New", monospace;
+        transition: background-color 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 10px; /* Space between icon and text */
+      }
+      #loginButton:hover {
+        background-color: #357ae8;
+      }
+      #loginButton img {
+        /* Style for Google icon */
+        width: 24px;
+        height: 24px;
+      }
+      #loginError {
+        margin-top: 20px;
+        color: #ff4d4d; /* Red error text */
+        font-size: 1.1em;
+        display: none; /* Hidden by default */
+      }
+
+      /* Game elements initially hidden */
+      #c,
+      #hud,
+      #speedIndicator,
+      #asteroidCounter,
+      #instructions,
+      #gameOverScreen {
+        display: none;
+      }
+      /* Ensure cursor is default on login, managed later */
+      body.game-active {
+        cursor: none;
+      }
+      body:not(.game-active) {
+        cursor: default;
+      }
+
+      /* --- Existing Styles (Instructions, GameOver, HighScore, HUD, etc.) --- */
       #instructions {
         position: absolute;
         top: 10px;
@@ -28,7 +96,7 @@
         background: rgba(0, 0, 0, 0.5);
         padding: 5px;
         border-radius: 3px;
-        display: none;
+        /* display: none; /* Controlled by JS */
         z-index: 10;
       }
       #gameOverScreen {
@@ -40,7 +108,7 @@
         background-color: rgba(0, 0, 0, 0.8); /* Darker overlay */
         color: white;
         font-family: "Consolas", "Courier New", monospace; /* Match font */
-        display: none; /* Initially hidden */
+        /* display: none; /* Controlled by JS */
         flex-direction: column;
         justify-content: center;
         align-items: center;
@@ -77,16 +145,14 @@
         background-color: #eee;
         color: #333;
       }
-
-      /* --- High Score Table Styles --- */
       #highScoreContainer {
         margin-top: 30px;
         background-color: rgba(20, 20, 20, 0.7);
         padding: 15px 25px;
         border-radius: 8px;
         border: 1px solid #555;
-        max-width: 350px;
-        width: 80%;
+        max-width: 400px; /* Increased width for name */
+        width: 90%;
       }
       #highScoreContainer h2 {
         margin-top: 0;
@@ -107,6 +173,9 @@
       }
       #highScoreList li {
         margin-bottom: 5px;
+        white-space: nowrap; /* Prevent names from wrapping */
+        overflow: hidden;
+        text-overflow: ellipsis; /* Add ... for long names */
       }
       #highScoreList .loading,
       #highScoreList .error {
@@ -115,14 +184,12 @@
         text-align: center;
         list-style: none; /* Remove bullet for status messages */
       }
-
-      /* --- HUD Styles --- */
       #hud {
         position: absolute;
         top: 15px;
         left: 15px;
         right: 15px;
-        display: flex;
+        /* display: flex; */ /* Controlled by JS */
         justify-content: space-between;
         align-items: flex-start; /* Align items to the top */
         pointer-events: none; /* Allow clicking through HUD */
@@ -130,7 +197,6 @@
         color: white;
         font-family: "Consolas", "Courier New", monospace; /* Consistent font */
       }
-
       #healthContainer {
         display: flex;
         align-items: center;
@@ -139,36 +205,30 @@
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.3);
       }
-
       #healthIcon {
-        width: 20px; /* Adjust size as needed */
+        width: 20px;
         height: 20px;
         margin-right: 8px;
-        /* Placeholder: Use an actual heart image/icon later */
         position: relative;
-        font-size: 18px; /* Adjust emoji size */
-        line-height: 20px; /* Align emoji vertically */
+        font-size: 18px;
+        line-height: 20px;
       }
-
       #healthBarOuter {
-        width: 150px; /* Adjust width as needed */
+        width: 150px;
         height: 15px;
         background-color: #444;
         border: 1px solid #666;
         border-radius: 3px;
-        overflow: hidden; /* Ensure inner bar stays within bounds */
-        /* margin-top: 2px; /* Align slightly better with icon */
+        overflow: hidden;
       }
-
       #healthBarInner {
         height: 100%;
-        width: 100%; /* Initial full health */
+        width: 100%;
         background-color: #4caf50; /* Green */
-        transition: width 0.3s ease, background-color 0.3s ease; /* Smooth transition for health loss */
+        transition: width 0.3s ease, background-color 0.3s ease;
       }
-
       #asteroidCounter {
-        position: absolute; /* Position independently */
+        position: absolute;
         bottom: 20px;
         right: 20px;
         background-color: rgba(0, 0, 0, 0.5);
@@ -180,26 +240,66 @@
         z-index: 15;
         text-align: right;
         font-family: "Consolas", "Courier New", monospace;
+        /* display: block; */ /* Controlled by JS */
       }
       #speedIndicator {
-        position: absolute; /* Position independently */
-        bottom: 20px; /* Same distance from bottom as asteroid counter */
-        left: 20px; /* Position on the left */
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
         background-color: rgba(0, 0, 0, 0.5);
         padding: 8px 12px;
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.3);
-        font-size: 1.2em; /* Slightly smaller than asteroid count? Adjust as needed */
+        font-size: 1.2em;
         color: #eee;
         z-index: 15;
-        pointer-events: none; /* Allow clicking through */
-        font-family: "Consolas", "Courier New", monospace; /* Match other HUD text */
+        pointer-events: none;
+        font-family: "Consolas", "Courier New", monospace;
+        /* display: block; */ /* Controlled by JS */
       }
-
-      /* --- End HUD Styles --- */
+      /* --- End Existing Styles --- */
     </style>
   </head>
   <body>
+    <!-- Login Screen -->
+    <div id="loginScreen">
+      <h1>Asteroid Shooter</h1>
+      <button id="loginButton">
+        <!-- Simple Google Icon SVG (replace with img if preferred) -->
+        <svg
+          version="1.1"
+          xmlns="http://www.w3.org/2000/svg"
+          width="24px"
+          height="24px"
+          viewBox="0 0 48 48"
+        >
+          <g>
+            <path
+              fill="#EA4335"
+              d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+            ></path>
+            <path
+              fill="#4285F4"
+              d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+            ></path>
+            <path
+              fill="#FBBC05"
+              d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+            ></path>
+            <path
+              fill="#34A853"
+              d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+            ></path>
+            <path fill="none" d="M0 0h48v48H0z"></path>
+          </g>
+        </svg>
+        Sign in with Google
+      </button>
+      <div id="loginError"></div>
+      <!-- To show login errors -->
+    </div>
+
+    <!-- Game Canvas -->
     <canvas id="c"></canvas>
 
     <!-- HUD Elements -->
@@ -210,6 +310,7 @@
           <div id="healthBarInner"></div>
         </div>
       </div>
+      <!-- Maybe add a welcome message/logout button here later -->
     </div>
     <div id="speedIndicator">🚀 0.0 m/sec</div>
     <div id="asteroidCounter">0 / 0 ☄️</div>
@@ -219,18 +320,12 @@
     <div id="gameOverScreen">
       <h1>Game Over</h1>
       <div id="finalScore">Final Score: 0</div>
-      <!-- Added Final Score Display -->
-
-      <!-- High Score Section -->
       <div id="highScoreContainer">
         <h2>Global Records</h2>
         <ol id="highScoreList">
           <li class="loading">Loading scores...</li>
-          <!-- Scores will be populated here -->
         </ol>
       </div>
-      <!-- End High Score Section -->
-
       <button id="restartButton">Restart Game</button>
     </div>
 
@@ -248,7 +343,8 @@
           "three/addons/": "https://unpkg.com/three@0.156.1/examples/jsm/",
           "simplex-noise": "https://unpkg.com/simplex-noise@4.0.1/dist/esm/simplex-noise.js",
           "firebase/app": "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js",
-          "firebase/database": "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"
+          "firebase/database": "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"
         }
       }
     </script>
@@ -270,8 +366,15 @@
         limitToLast,
         get,
         remove,
-        onValue, // Optional: for real-time updates if desired
+        onValue,
       } from "firebase/database";
+      import {
+        getAuth,
+        GoogleAuthProvider,
+        signInWithPopup,
+        onAuthStateChanged,
+        signOut, // Optional: If you add a logout button
+      } from "firebase/auth";
 
       // --- Firebase Configuration ---
       const firebaseConfig = {
@@ -288,23 +391,31 @@
       // Initialize Firebase
       let firebaseApp;
       let database;
+      let auth; // Firebase Auth instance
+      let googleProvider; // Google Auth Provider instance
       let highScoresRef;
-      const HIGH_SCORE_COUNT = 10; // Number of scores to display/keep
+      let currentUser = null; // Store the currently logged-in user info
+      const HIGH_SCORE_COUNT = 10;
 
       try {
         firebaseApp = initializeApp(firebaseConfig);
         database = getDatabase(firebaseApp);
-        highScoresRef = ref(database, "highscores"); // Path in your database
+        auth = getAuth(firebaseApp); // Initialize Auth
+        googleProvider = new GoogleAuthProvider(); // Initialize Google Provider
+        highScoresRef = ref(database, "highscores");
         console.log("Firebase initialized successfully.");
       } catch (error) {
         console.error("Firebase initialization failed:", error);
-        // Optionally display an error to the user
-        // You could disable high score functionality here
-        database = null; // Ensure database operations fail gracefully later
+        // Show error on login screen maybe?
+        const loginErrorDiv = document.getElementById("loginError");
+        if (loginErrorDiv)
+          loginErrorDiv.textContent =
+            "Firebase initialization failed. High scores unavailable.";
+        database = null;
+        auth = null;
       }
 
       // --- Game Constants ---
-      // (Keep existing constants)
       const ASTEROID_SPAWN_RATE = 3;
       const INITIAL_ASTEROID_SPEED = 20.0;
       const ASTEROID_SCALE_MIN = 0.4;
@@ -312,7 +423,6 @@
       const ASTEROID_BASE_RADIUS = 1.0;
       const ASTEROID_DESTRUCTION_DURATION = 0.2;
       const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff);
-
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
       const SPAWN_DISTANCE = 140;
@@ -323,18 +433,17 @@
       const SHIP_INITIAL_HEALTH = 100;
       const SHIP_COLLISION_DAMAGE = 10;
       const INVULNERABILITY_DURATION = 1.5;
-
       const PROJECTILE_SPEED = 100.0;
       const PROJECTILE_RADIUS = 0.1;
       const SHOT_COOLDOWN = 0.15;
       const MAX_PROJECTILES = 30;
       const PROJECTILE_DESPAWN_Z = -130;
-
-      const INVULNERABILITY_FLASH_INTERVAL = 0.1; // Blink every 0.1 seconds
+      const INVULNERABILITY_FLASH_INTERVAL = 0.1;
 
       // --- Three.js Setup ---
+      const canvas = document.getElementById("c");
       const renderer = new THREE.WebGLRenderer({
-        canvas: document.getElementById("c"),
+        canvas: canvas,
         antialias: true,
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -362,14 +471,12 @@
       const projectiles = [];
       let targetShipPosition = new THREE.Vector3(0, -1, SHIP_DEPTH);
       const mouseNDC = new THREE.Vector2();
-
       let isTouching = false;
       let isShooting = false;
       let touchStartPos = new THREE.Vector2();
       let touchStartShipPos = new THREE.Vector3();
       let timeSinceLastShot = 0;
       let timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
-
       let isGameOver = false;
       let animationFrameId = null;
       let shipBoundingSphere = null;
@@ -380,85 +487,192 @@
       let invulnerabilityTimer = 0;
       let shipOriginalMaterial = null;
       let asteroidSpeed = INITIAL_ASTEROID_SPEED;
-      let timeSinceLastFlash = 0; // Timer for flash interval
+      let timeSinceLastFlash = 0;
+      let gameInitialized = false; // Flag to prevent multiple initializations
 
       // --- DOM Elements ---
+      const loginScreen = document.getElementById("loginScreen");
+      const loginButton = document.getElementById("loginButton");
+      const loginErrorDiv = document.getElementById("loginError");
       const instructionsDiv = document.getElementById("instructions");
       const gameOverScreen = document.getElementById("gameOverScreen");
       const restartButton = document.getElementById("restartButton");
       const healthBarInner = document.getElementById("healthBarInner");
       const asteroidCounterDisplay = document.getElementById("asteroidCounter");
       const speedIndicatorDisplay = document.getElementById("speedIndicator");
-      const finalScoreDisplay = document.getElementById("finalScore"); // New
-      const highScoreList = document.getElementById("highScoreList"); // New
+      const finalScoreDisplay = document.getElementById("finalScore");
+      const highScoreList = document.getElementById("highScoreList");
+      const hud = document.getElementById("hud");
 
       // --- Loaders ---
       const loadingManager = new THREE.LoadingManager();
       const fbxLoader = new FBXLoader(loadingManager);
       const textureLoader = new THREE.TextureLoader(loadingManager);
 
-      // --- Initialization ---
-      instructionsDiv.style.display = "block";
-      document.body.style.cursor = "none";
+      // --- Authentication Logic ---
 
-      // Load Background
-      textureLoader.load(
-        "./assets/background.png",
-        (texture) => {
-          scene.background = texture;
-        },
-        undefined,
-        (error) => {
-          console.error("Error loading background texture:", error);
-          instructionsDiv.innerText = `Error loading background: assets/background.png. Check path/file.`;
-          instructionsDiv.style.color = "red";
+      // Function to handle Google Sign-In
+      const loginWithGoogle = async () => {
+        if (!auth || !googleProvider) {
+          loginErrorDiv.textContent = "Authentication service not available.";
+          loginErrorDiv.style.display = "block";
+          return;
         }
-      );
+        loginErrorDiv.style.display = "none"; // Clear previous errors
+        try {
+          const result = await signInWithPopup(auth, googleProvider);
+          // This will trigger the onAuthStateChanged listener below
+          console.log("Sign-in successful:", result.user);
+        } catch (error) {
+          console.error("Google Sign-In Error:", error);
+          loginErrorDiv.textContent = `Login failed: ${error.message}`;
+          loginErrorDiv.style.display = "block";
+        }
+      };
 
-      // Load Ship Model
-      fbxLoader.load(
-        "./assets/Galactic_Soarer_0504175114_texture.fbx",
-        (fbx) => {
-          playerShip = fbx;
-          playerShip.scale.setScalar(0.02);
-          playerShip.rotation.x = Math.PI * 0.05;
-          playerShip.position.set(
-            targetShipPosition.x,
-            targetShipPosition.y,
-            SHIP_DEPTH
+      // Listen for Authentication State Changes
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          // User is signed in
+          currentUser = user;
+          console.log(
+            "User logged in:",
+            currentUser.displayName,
+            currentUser.uid
           );
-          scene.add(playerShip);
+          loginScreen.style.display = "none"; // Hide login
+          // Show game elements
+          canvas.style.display = "block";
+          hud.style.display = "flex"; // Use flex for layout
+          speedIndicator.style.display = "block";
+          asteroidCounter.style.display = "block";
+          document.body.classList.add("game-active"); // Enable custom cursor etc.
 
-          playerShip.traverse((child) => {
-            if (child.isMesh && !shipOriginalMaterial) {
-              shipOriginalMaterial = child.material;
+          // Initialize game assets ONLY if not already done
+          if (!gameInitialized) {
+            initializeGameAssets();
+          } else {
+            // If assets are loaded, maybe just ensure the game starts if it was stopped
+            if (isGameOver) {
+              // If returning after game over, maybe just stay on game over screen
+              // Or potentially call restartGame() here if you want auto-restart on re-login
+            } else if (!animationFrameId) {
+              // If game wasn't running, start it
+              startGame();
             }
-          });
-
-          const box = new THREE.Box3().setFromObject(playerShip, true);
-          shipBoundingSphere = new THREE.Sphere();
-          box.getBoundingSphere(shipBoundingSphere);
-          shipBoundingSphere.radius *= SHIP_COLLISION_RADIUS_FACTOR;
-        },
-        (xhr) => {
-          const percentLoaded = (xhr.loaded / xhr.total) * 100;
-          if (
-            !scene.background &&
-            !instructionsDiv.innerText.startsWith("Error")
-          ) {
-            instructionsDiv.innerText = `Loading ship: ${Math.round(
-              percentLoaded
-            )}%`;
           }
-        },
-        (error) => {
-          console.error("Error loading FBX model:", error);
-          instructionsDiv.innerText = `Error loading ship: ${shipModelPath}. Check path and console.`;
-          instructionsDiv.style.color = "red";
-        }
-      );
+        } else {
+          // User is signed out
+          currentUser = null;
+          console.log("User logged out.");
+          loginScreen.style.display = "flex"; // Show login
+          // Hide game elements
+          canvas.style.display = "none";
+          hud.style.display = "none";
+          speedIndicator.style.display = "none";
+          asteroidCounter.style.display = "none";
+          gameOverScreen.style.display = "none"; // Hide game over if showing
+          instructionsDiv.style.display = "none"; // Hide instructions
+          document.body.classList.remove("game-active"); // Use default cursor
 
-      // Projectile Assets
+          // Stop the game loop if it's running
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+          }
+          // Optional: Reset game state completely on logout
+          // resetFullGameState(); // You'd need to create this function
+          isGameOver = true; // Treat logout similar to game over to prevent auto-restart issues
+          gameInitialized = false; // Allow re-initialization on next login
+        }
+      });
+
+      // Attach login function to button
+      loginButton.addEventListener("click", loginWithGoogle);
+
+      // --- Initialization ---
+      // Moved asset loading logic into a function called by onAuthStateChanged
+      function initializeGameAssets() {
+        if (gameInitialized) return; // Prevent double initialization
+        gameInitialized = true;
+
+        instructionsDiv.style.display = "block";
+        instructionsDiv.textContent = "Loading assets...";
+
+        // Load Background
+        textureLoader.load(
+          "./assets/background.png",
+          (texture) => {
+            scene.background = texture;
+          },
+          undefined,
+          (error) => {
+            console.error("Error loading background texture:", error);
+            instructionsDiv.innerText = `Error loading background. Check path/file.`;
+            instructionsDiv.style.color = "red";
+          }
+        );
+
+        // Load Ship Model
+        fbxLoader.load(
+          "./assets/Galactic_Soarer_0504175114_texture.fbx", // Ensure this path is correct
+          (fbx) => {
+            playerShip = fbx;
+            playerShip.scale.setScalar(0.02);
+            playerShip.rotation.x = Math.PI * 0.05;
+            playerShip.position.set(
+              targetShipPosition.x,
+              targetShipPosition.y,
+              SHIP_DEPTH
+            );
+            scene.add(playerShip);
+
+            playerShip.traverse((child) => {
+              if (child.isMesh && !shipOriginalMaterial) {
+                shipOriginalMaterial = child.material;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(playerShip, true);
+            shipBoundingSphere = new THREE.Sphere();
+            box.getBoundingSphere(shipBoundingSphere);
+            shipBoundingSphere.radius *= SHIP_COLLISION_RADIUS_FACTOR;
+          },
+          (xhr) => {
+            const percentLoaded = (xhr.loaded / xhr.total) * 100;
+            if (
+              !scene.background &&
+              !instructionsDiv.innerText.startsWith("Error")
+            ) {
+              instructionsDiv.innerText = `Loading ship: ${Math.round(
+                percentLoaded
+              )}%`;
+            }
+          },
+          (error) => {
+            console.error("Error loading FBX model:", error);
+            instructionsDiv.innerText = `Error loading ship. Check path and console.`;
+            instructionsDiv.style.color = "red";
+          }
+        );
+
+        loadingManager.onLoad = () => {
+          if (!instructionsDiv.innerText.startsWith("Error")) {
+            instructionsDiv.style.display = "none";
+          }
+          setupInputListeners();
+          restartButton.addEventListener("click", restartGame);
+          startGame(); // Start the game loop *after* loading and login
+        };
+
+        loadingManager.onError = (url) => {
+          console.error("There was an error loading " + url);
+          instructionsDiv.innerText = `Error loading: ${url}. Check console.`;
+          instructionsDiv.style.color = "red";
+        };
+      }
+
+      // Projectile Assets (defined outside init function as they don't rely on loaders)
       const projectileGeometry = new THREE.SphereGeometry(
         PROJECTILE_RADIUS,
         8,
@@ -466,40 +680,33 @@
       );
       const projectileMaterial = new THREE.MeshBasicMaterial({
         color: 0xffff00,
-      }); // Yellow projectiles
-
-      loadingManager.onLoad = () => {
-        if (!instructionsDiv.innerText.startsWith("Error")) {
-          instructionsDiv.style.display = "none";
-        }
-        setupInputListeners();
-        restartButton.addEventListener("click", restartGame);
-        startGame();
-      };
-
-      loadingManager.onError = (url) => {
-        console.error("There was an error loading " + url);
-      };
+      }); // Yellow
 
       // --- Firebase High Score Functions ---
 
       async function saveHighScore(score) {
         if (!database || !highScoresRef || score <= 0) {
           console.log("Database not available or score is zero, not saving.");
-          return; // Don't save if Firebase isn't initialized or score is 0
+          return;
+        }
+        if (!currentUser) {
+          console.log("User not logged in, cannot save score.");
+          // Optionally inform the user they need to be logged in.
+          return;
         }
 
         try {
-          // 1. Push the new score
+          // 1. Push the new score with user info
           const newScore = {
+            name: currentUser.displayName || "Anonymous", // Use display name, fallback
+            userId: currentUser.uid,
             score: score,
-            timestamp: serverTimestamp(), // Use server timestamp for consistency
+            timestamp: serverTimestamp(),
           };
           await push(highScoresRef, newScore);
-          console.log("Score potentially saved:", score);
+          console.log("Score saved for user:", currentUser.displayName, score);
 
           // 2. Trim the leaderboard (keep only the top HIGH_SCORE_COUNT)
-          // Fetch all scores, ordered by score ascending
           const scoresQuery = query(highScoresRef, orderByChild("score"));
           const snapshot = await get(scoresQuery);
 
@@ -509,7 +716,6 @@
               scores.push({ key: childSnapshot.key, ...childSnapshot.val() });
             });
 
-            // If we have more scores than allowed, remove the lowest ones
             if (scores.length > HIGH_SCORE_COUNT) {
               const scoresToRemove = scores.length - HIGH_SCORE_COUNT;
               for (let i = 0; i < scoresToRemove; i++) {
@@ -531,10 +737,9 @@
           return;
         }
 
-        highScoreList.innerHTML = '<li class="loading">Loading scores...</li>'; // Show loading state
+        highScoreList.innerHTML = '<li class="loading">Loading scores...</li>';
 
         try {
-          // Fetch the TOP N scores (limitToLast retrieves the highest when ordered by score)
           const scoresQuery = query(
             highScoresRef,
             orderByChild("score"),
@@ -548,20 +753,21 @@
               scores.push(childSnapshot.val());
             });
 
-            // Reverse sort because limitToLast gives them potentially lowest-to-highest within the top N
-            scores.sort((a, b) => b.score - a.score);
+            scores.sort((a, b) => b.score - a.score); // Sort descending
 
-            highScoreList.innerHTML = ""; // Clear loading/previous scores
+            highScoreList.innerHTML = "";
             if (scores.length === 0) {
               highScoreList.innerHTML =
                 '<li class="loading">No scores yet!</li>';
             } else {
               scores.forEach((scoreData, index) => {
                 const li = document.createElement("li");
-                // You could add timestamp formatting here if needed:
-                // const date = new Date(scoreData.timestamp);
-                // li.textContent = `${index + 1}. ${scoreData.score} pts (${date.toLocaleDateString()})`;
-                li.textContent = `${index + 1}. ${scoreData.score} pts`;
+                const displayName = scoreData.name || "Anonymous"; // Handle missing names
+                // Truncate long names visually via CSS (text-overflow: ellipsis)
+                li.textContent = `${index + 1}. ${displayName}: ${
+                  scoreData.score
+                } pts`;
+                li.title = `${displayName}: ${scoreData.score} pts`; // Tooltip for full name
                 highScoreList.appendChild(li);
               });
             }
@@ -778,18 +984,18 @@
         clampTargetShipPosition();
       }
       function onMouseMove(event) {
-        if (isGameOver) return;
+        if (isGameOver || !currentUser) return; // Also check if logged in
         updateTargetPositionFromScreenCoords(event.clientX, event.clientY);
       }
       function onMouseDown(event) {
-        if (isGameOver) return;
+        if (isGameOver || !currentUser) return;
         if (event.button === 0) isShooting = true;
       }
       function onMouseUp(event) {
         if (event.button === 0) isShooting = false;
       }
       function onTouchStart(event) {
-        if (isGameOver) return;
+        if (isGameOver || !currentUser) return;
         event.preventDefault();
         isShooting = true;
         if (event.touches.length === 1 && !isTouching) {
@@ -801,7 +1007,7 @@
         }
       }
       function onTouchMove(event) {
-        if (isGameOver) return;
+        if (isGameOver || !currentUser) return;
         event.preventDefault();
         if (isTouching && event.touches.length > 0) {
           const touch = event.touches[0];
@@ -970,7 +1176,7 @@
           // Check if it's time to toggle visibility
           if (timeSinceLastFlash >= INVULNERABILITY_FLASH_INTERVAL) {
             playerShip.visible = !playerShip.visible; // Toggle visibility
-            timeSinceLastFlash = 0; // Reset the flash timer (or timeSinceLastFlash -= INVULNERABILITY_FLASH_INTERVAL for slightly more accuracy)
+            timeSinceLastFlash = 0; // Reset the flash timer
           }
 
           // Check if invulnerability has ended
@@ -980,7 +1186,8 @@
             timeSinceLastFlash = 0; // Reset timer just in case
           }
         } else {
-          if (!playerShip.visible) {
+          if (playerShip && !playerShip.visible) {
+            // Check if playerShip exists
             playerShip.visible = true;
           }
         }
@@ -988,8 +1195,14 @@
 
       // --- Collision Detection ---
       function checkShipAsteroidCollision() {
-        if (!playerShip || !shipBoundingSphere || isInvulnerable || isGameOver)
-          return; // No collision if invulnerable or game over
+        if (
+          !playerShip ||
+          !shipBoundingSphere ||
+          isInvulnerable ||
+          isGameOver ||
+          !currentUser
+        )
+          return; // No collision if invulnerable, game over, or logged out
 
         for (let i = asteroids.length - 1; i >= 0; i--) {
           // Iterate backwards for safe removal
@@ -1009,7 +1222,7 @@
             playerHealth -= SHIP_COLLISION_DAMAGE;
             isInvulnerable = true;
             invulnerabilityTimer = INVULNERABILITY_DURATION;
-            playerShip.visible = true; // Ensure visible when invulnerability starts
+            if (playerShip) playerShip.visible = true; // Ensure visible when invulnerability starts
             timeSinceLastFlash = 0; // Reset flash timer
 
             // Destroy the asteroid that hit the player
@@ -1029,6 +1242,8 @@
       }
 
       function checkProjectileAsteroidCollisions() {
+        if (!currentUser) return; // Don't check if logged out
+
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const projectile = projectiles[i];
           if (!projectile.userData || !projectile.userData.velocity) continue;
@@ -1063,23 +1278,30 @@
         console.log("Game Over! Final Score:", asteroidsDestroyed);
         isGameOver = true;
         isShooting = false;
-        cancelAnimationFrame(animationFrameId);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = null; // Important: clear the ID
 
-        finalScoreDisplay.textContent = `Final Score: ${asteroidsDestroyed}`; // Update final score display
+        finalScoreDisplay.textContent = `Final Score: ${asteroidsDestroyed}`;
         gameOverScreen.style.display = "flex";
-        document.body.style.cursor = "default";
-        if (playerShip) playerShip.visible = true;
+        document.body.classList.remove("game-active"); // Show default cursor
 
-        // Attempt to save score and display leaderboard
-        saveHighScore(asteroidsDestroyed); // Save score (async, non-blocking)
-        fetchAndDisplayHighScores(); // Fetch and display scores (async, non-blocking)
+        if (playerShip) playerShip.visible = true; // Ensure ship is visible
+
+        // Attempt to save score (checks internally if user is logged in) and display leaderboard
+        saveHighScore(asteroidsDestroyed);
+        fetchAndDisplayHighScores();
       }
 
       function restartGame() {
+        if (!currentUser) {
+          console.log("Cannot restart, user not logged in.");
+          // Optionally show login screen again or display a message
+          return;
+        }
         isGameOver = false;
         isShooting = false;
         gameOverScreen.style.display = "none";
-        document.body.style.cursor = "none";
+        document.body.classList.add("game-active"); // Hide cursor again
 
         targetShipPosition.set(0, -1, SHIP_DEPTH);
         if (playerShip) {
@@ -1103,22 +1325,34 @@
         totalAsteroidsSpawned = 0;
         isInvulnerable = false;
         invulnerabilityTimer = 0;
-        asteroidSpeed = INITIAL_ASTEROID_SPEED; // Reset speed
+        asteroidSpeed = INITIAL_ASTEROID_SPEED;
 
         updateUI();
-        startGame();
+        startGame(); // Start the animation loop again
       }
 
       function startGame() {
-        isGameOver = false;
+        if (!currentUser || isGameOver || animationFrameId) {
+          console.log(
+            "Start conditions not met (logged in? game over? already running?)"
+          );
+          return; // Don't start if not logged in, game is over, or loop already running
+        }
+        console.log("Starting game loop");
+        isGameOver = false; // Ensure game isn't marked as over
         isShooting = false;
-        document.body.style.cursor = "none";
+        document.body.classList.add("game-active"); // Hide cursor
         updateUI();
-        animate();
+        animate(); // Start the loop
       }
 
       function animate() {
-        if (isGameOver) return;
+        // Stop if game over or user logs out
+        if (isGameOver || !currentUser) {
+          console.log("Animation loop stopping.");
+          animationFrameId = null; // Clear ID if stopped
+          return;
+        }
         animationFrameId = requestAnimationFrame(animate);
 
         const deltaTime = clock.getDelta();
@@ -1142,7 +1376,7 @@
 
         // Collisions
         checkProjectileAsteroidCollisions();
-        checkShipAsteroidCollision();
+        checkShipAsteroidCollision(); // This checks for game over internally
 
         renderer.render(scene, camera);
       }
@@ -1154,15 +1388,16 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       });
 
+      // Initial WebGL check (optional but good)
       if (!renderer.getContext()) {
-        instructionsDiv.innerText = "WebGL is not supported by your browser!";
-        instructionsDiv.style.color = "red";
-        instructionsDiv.style.display = "block";
-        gameOverScreen.style.display = "none";
-        document.getElementById("hud").style.display = "none";
-        document.getElementById("asteroidCounter").style.display = "none";
-        speedIndicatorDisplay.style.display = "none";
+        loginScreen.innerHTML =
+          "<h1>Error</h1><p>WebGL is not supported by your browser!</p>";
+        loginScreen.style.display = "flex";
+        // Hide everything else potentially?
       }
+
+      // NOTE: Game initialization (asset loading and start) is now triggered by
+      // the onAuthStateChanged listener after a successful login.
     </script>
   </body>
 </html>
