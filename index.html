@@ -12,6 +12,7 @@
         margin: 0;
         overflow: hidden;
         /* cursor: none; /* Manage cursor visibility in JS */
+        font-family: "Consolas", "Courier New", monospace; /* Pixel-like font */
       }
       canvas {
         display: block;
@@ -61,10 +62,110 @@
       #restartButton:hover {
         background-color: #ddd;
       }
+
+      /* --- HUD Styles --- */
+      #hud {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        right: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start; /* Align items to the top */
+        pointer-events: none; /* Allow clicking through HUD */
+        z-index: 15;
+        color: white;
+      }
+
+      #healthContainer {
+        display: flex;
+        align-items: center;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 5px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      #healthIcon {
+        width: 20px; /* Adjust size as needed */
+        height: 20px;
+        margin-right: 8px;
+        /* Placeholder: Use an actual heart image/icon later */
+        background-color: #ff4d4d; /* Red color for heart placeholder */
+        border-radius: 50% 50% 50% 0 / 50% 50% 0 50%; /* Simple heart shape */
+        transform: rotate(-45deg);
+        position: relative;
+      }
+      #healthIcon::before,
+      #healthIcon::after {
+        content: "";
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #ff4d4d;
+      }
+      #healthIcon::before {
+        top: -10px;
+        left: 0;
+      }
+      #healthIcon::after {
+        left: 10px;
+        top: 0;
+      }
+
+      #healthBarOuter {
+        width: 150px; /* Adjust width as needed */
+        height: 15px;
+        background-color: #444;
+        border: 1px solid #666;
+        border-radius: 3px;
+        overflow: hidden; /* Ensure inner bar stays within bounds */
+        margin-top: 2px; /* Align slightly better with icon */
+      }
+
+      #healthBarInner {
+        height: 100%;
+        width: 100%; /* Initial full health */
+        background-color: #4caf50; /* Green */
+        transition: width 0.3s ease, background-color 0.3s ease; /* Smooth transition for health loss */
+      }
+
+      #asteroidCounter {
+        position: absolute; /* Position independently */
+        bottom: 20px;
+        right: 20px;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        font-size: 1.4em;
+        color: #eee;
+        z-index: 15;
+        text-align: right;
+        /* Simple asteroid icon using text - can be replaced with image */
+        /* content: "☄️ "; Add emoji if font supports */
+      }
+
+      /* --- End HUD Styles --- */
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
+
+    <!-- HUD Elements -->
+    <div id="hud">
+      <div id="healthContainer">
+        <div id="healthIcon"></div>
+        <div id="healthBarOuter">
+          <div id="healthBarInner"></div>
+        </div>
+      </div>
+      <!-- Removed asteroid counter from flex container -->
+    </div>
+    <div id="asteroidCounter">0 ☄️</div>
+    <!-- Placed outside flex for absolute positioning -->
+
     <div id="instructions">Loading assets...</div>
     <div id="gameOverScreen">
       <h1>Game Over</h1>
@@ -91,11 +192,14 @@
       import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
       import { createNoise3D } from "simplex-noise";
 
+      // Game Constants
       const ASTEROID_SPAWN_RATE = 3;
       const ASTEROID_SPEED = 90.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const ASTEROID_BASE_RADIUS = 1.0;
+      const ASTEROID_DESTRUCTION_DURATION = 0.2; // Duration for shrink animation
+      const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff); // White flash
 
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
@@ -104,6 +208,9 @@
       const MAX_ASTEROIDS = 50;
       const MOVEMENT_RATIO = 2.0;
       const SHIP_COLLISION_RADIUS_FACTOR = 0.4;
+      const SHIP_INITIAL_HEALTH = 100;
+      const SHIP_COLLISION_DAMAGE = 10; // Health lost per asteroid hit
+      const INVULNERABILITY_DURATION = 1.5; // Seconds of invulnerability after hit
 
       const PROJECTILE_SPEED = 100.0;
       const PROJECTILE_RADIUS = 0.1;
@@ -111,9 +218,7 @@
       const MAX_PROJECTILES = 30;
       const PROJECTILE_DESPAWN_Z = -130;
 
-      const ASTEROID_DESTRUCTION_DURATION = 0.2; // Duration for shrink animation
-      const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff); // White flash
-
+      // Three.js Setup
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById("c"),
         antialias: true,
@@ -137,6 +242,7 @@
 
       const clock = new THREE.Clock();
 
+      // Game State Variables
       let playerShip = null;
       const asteroids = [];
       const projectiles = [];
@@ -148,21 +254,35 @@
       let touchStartPos = new THREE.Vector2();
       let touchStartShipPos = new THREE.Vector3();
       let timeSinceLastShot = 0;
-
-      const loadingManager = new THREE.LoadingManager();
-      const fbxLoader = new FBXLoader(loadingManager);
-      const textureLoader = new THREE.TextureLoader(loadingManager);
-      const instructionsDiv = document.getElementById("instructions");
-      const gameOverScreen = document.getElementById("gameOverScreen");
-      const restartButton = document.getElementById("restartButton");
-      instructionsDiv.style.display = "block";
+      let timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
 
       let isGameOver = false;
       let animationFrameId = null;
       let shipBoundingSphere = null;
+      let playerHealth = SHIP_INITIAL_HEALTH;
+      let asteroidsDestroyed = 0;
+      let isInvulnerable = false;
+      let invulnerabilityTimer = 0;
+      let shipFlashToggle = false; // For flashing effect
+      let shipOriginalMaterial = null; // To store original material for flashing
 
+      // DOM Elements
+      const instructionsDiv = document.getElementById("instructions");
+      const gameOverScreen = document.getElementById("gameOverScreen");
+      const restartButton = document.getElementById("restartButton");
+      const healthBarInner = document.getElementById("healthBarInner");
+      const asteroidCounterDisplay = document.getElementById("asteroidCounter");
+
+      // Loaders
+      const loadingManager = new THREE.LoadingManager();
+      const fbxLoader = new FBXLoader(loadingManager);
+      const textureLoader = new THREE.TextureLoader(loadingManager);
+
+      // --- Initialization ---
+      instructionsDiv.style.display = "block";
       document.body.style.cursor = "none";
 
+      // Load Background
       const backgroundTexture = textureLoader.load(
         "./assets/background.png",
         (texture) => {
@@ -173,12 +293,11 @@
           console.error("Error loading background texture:", error);
           instructionsDiv.innerText = `Error loading background: assets/background.png. Check path/file.`;
           instructionsDiv.style.color = "red";
-          instructionsDiv.style.display = "block";
         }
       );
 
+      // Load Ship Model
       const shipModelPath = "./assets/Galactic_Soarer_0504175114_texture.fbx";
-
       fbxLoader.load(
         shipModelPath,
         (fbx) => {
@@ -192,6 +311,13 @@
           );
           scene.add(playerShip);
 
+          // Store original material for flashing later
+          playerShip.traverse((child) => {
+            if (child.isMesh && !shipOriginalMaterial) {
+              shipOriginalMaterial = child.material;
+            }
+          });
+
           const box = new THREE.Box3().setFromObject(playerShip, true);
           shipBoundingSphere = new THREE.Sphere();
           box.getBoundingSphere(shipBoundingSphere);
@@ -199,7 +325,10 @@
         },
         (xhr) => {
           const percentLoaded = (xhr.loaded / xhr.total) * 100;
-          if (!scene.background) {
+          if (
+            !scene.background &&
+            !instructionsDiv.innerText.startsWith("Error")
+          ) {
             instructionsDiv.innerText = `Loading ship: ${Math.round(
               percentLoaded
             )}%`;
@@ -209,18 +338,18 @@
           console.error("Error loading FBX model:", error);
           instructionsDiv.innerText = `Error loading ship: ${shipModelPath}. Check path and console.`;
           instructionsDiv.style.color = "red";
-          instructionsDiv.style.display = "block";
         }
       );
 
+      // Projectile Assets
       const projectileGeometry = new THREE.SphereGeometry(
         PROJECTILE_RADIUS,
         8,
         8
       );
       const projectileMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffff00, // Yellow projectiles
-      });
+        color: 0xffff00,
+      }); // Yellow projectiles
 
       loadingManager.onLoad = () => {
         if (!instructionsDiv.innerText.startsWith("Error")) {
@@ -235,18 +364,18 @@
         console.error("There was an error loading " + url);
       };
 
+      // --- Utility Functions ---
+
       function makeAsteroid() {
         const RADIUS = ASTEROID_BASE_RADIUS;
         const SEGMENTS = 8;
         const geometry = new THREE.SphereGeometry(RADIUS, SEGMENTS, SEGMENTS);
-
         const noise3D = createNoise3D();
         const posAttr = geometry.attributes.position;
         const v = new THREE.Vector3();
-
-        const OCTAVES = 3;
-        const BASE_FREQ = 1.4;
-        const BASE_AMP = 0.18;
+        const OCTAVES = 3,
+          BASE_FREQ = 1.4,
+          BASE_AMP = 0.18;
 
         for (let i = 0; i < posAttr.count; i++) {
           v.fromBufferAttribute(posAttr, i).normalize();
@@ -261,7 +390,6 @@
           v.multiplyScalar(RADIUS + n * BASE_AMP);
           posAttr.setXYZ(i, v.x, v.y, v.z);
         }
-
         posAttr.needsUpdate = true;
         geometry.computeVertexNormals();
         geometry.computeBoundingSphere();
@@ -272,7 +400,7 @@
           flatShading: true,
         });
         const mainAsteroid = new THREE.Mesh(geometry, mainMaterial);
-        mainAsteroid.userData.originalColor = mainMaterial.color.clone(); // Store original color
+        mainAsteroid.userData.originalColor = mainMaterial.color.clone();
 
         const outlineMaterial = new THREE.MeshBasicMaterial({
           color: 0x220022,
@@ -282,36 +410,94 @@
         const OUTLINE_SCALE = 1.06;
         outlineMesh.scale.set(OUTLINE_SCALE, OUTLINE_SCALE, OUTLINE_SCALE);
         mainAsteroid.add(outlineMesh);
-        outlineMesh.userData.originalColor = outlineMaterial.color.clone(); // Store original outline color
+        outlineMesh.userData.originalColor = outlineMaterial.color.clone();
 
         const speed = ASTEROID_SPEED;
-
-        const dirX = 0;
-        const dirY = 0;
-        const dirZ = 1.0;
-
-        const velocity = new THREE.Vector3(dirX, dirY, dirZ)
+        const velocity = new THREE.Vector3(0, 0, 1)
           .normalize()
           .multiplyScalar(speed);
 
         mainAsteroid.userData = {
-          ...mainAsteroid.userData, // Keep originalColor stored above
+          ...mainAsteroid.userData,
           velocity: velocity,
           rotationSpeed: new THREE.Vector3(
             THREE.MathUtils.randFloat(-0.5, 0.5),
             THREE.MathUtils.randFloat(-0.5, 0.5),
             THREE.MathUtils.randFloat(-0.5, 0.5)
           ),
-          boundingRadius: geometry.boundingSphere.radius, // Store original geometry radius
+          boundingRadius: geometry.boundingSphere.radius,
           isAsteroid: true,
-          isDying: false, // Add dying flag
+          isDying: false,
           dyingTimer: 0,
-          originalScale: 1.0, // Will be set when spawned
+          originalScale: 1.0,
         };
-
         return mainAsteroid;
       }
 
+      function markAsteroidAsDying(asteroid) {
+        if (!asteroid || asteroid.userData.isDying) return; // Already dying
+
+        asteroid.userData.isDying = true;
+        asteroid.userData.dyingTimer = ASTEROID_DESTRUCTION_DURATION;
+        // Store original scale if not already stored (should be set at spawn)
+        if (asteroid.userData.originalScale === undefined) {
+          asteroid.userData.originalScale = asteroid.scale.x;
+        }
+
+        // Flash Effect
+        if (asteroid.material) {
+          asteroid.material.color.copy(ASTEROID_FLASH_COLOR);
+          asteroid.material.emissive.copy(ASTEROID_FLASH_COLOR);
+        }
+        if (asteroid.children[0] && asteroid.children[0].material) {
+          asteroid.children[0].material.color.copy(ASTEROID_FLASH_COLOR);
+        }
+
+        // Increment counter only when an asteroid is marked for dying
+        asteroidsDestroyed++;
+        updateUI(); // Update the counter display
+      }
+
+      function disposeObject(obj) {
+        if (!obj) return;
+        if (obj.parent) obj.parent.remove(obj);
+        else if (scene.children.includes(obj)) scene.remove(obj);
+
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((material) => {
+              if (material.map) material.map.dispose();
+              material.dispose();
+            });
+          } else {
+            if (obj.material.map) obj.material.map.dispose();
+            obj.material.dispose();
+          }
+        }
+        while (obj.children.length > 0) {
+          disposeObject(obj.children[0]);
+        }
+      }
+
+      function updateUI() {
+        // Update Health Bar
+        const healthPercentage = Math.max(0, playerHealth); // Clamp at 0
+        healthBarInner.style.width = healthPercentage + "%";
+
+        if (healthPercentage <= 25) {
+          healthBarInner.style.backgroundColor = "#ff4d4d"; // Red
+        } else if (healthPercentage <= 50) {
+          healthBarInner.style.backgroundColor = "#ffcc00"; // Yellow
+        } else {
+          healthBarInner.style.backgroundColor = "#4CAF50"; // Green
+        }
+
+        // Update Asteroid Counter
+        asteroidCounterDisplay.textContent = `${asteroidsDestroyed} ☄️`;
+      }
+
+      // --- Input Handling ---
       function setupInputListeners() {
         window.addEventListener("mousemove", onMouseMove);
         window.addEventListener("mousedown", onMouseDown);
@@ -321,27 +507,21 @@
         window.addEventListener("touchend", onTouchEnd);
         window.addEventListener("touchcancel", onTouchEnd);
       }
-
       function screenToWorld(clientX, clientY) {
         const screenNDC = new THREE.Vector2();
         screenNDC.x = (clientX / window.innerWidth) * 2 - 1;
         screenNDC.y = -(clientY / window.innerHeight) * 2 + 1;
-
         const vector = new THREE.Vector3(screenNDC.x, screenNDC.y, 0.5);
         vector.unproject(camera);
-
         const dir = vector.sub(camera.position).normalize();
         const distance = (SHIP_DEPTH - camera.position.z) / dir.z;
         const worldPos = new THREE.Vector3();
         worldPos.copy(camera.position).add(dir.multiplyScalar(distance));
         return worldPos;
       }
-
       function getVisibleWidth() {
-        const visibleHeight = getVisibleHeight();
-        return visibleHeight * camera.aspect;
+        return getVisibleHeight() * camera.aspect;
       }
-
       function getVisibleHeight() {
         return (
           2 *
@@ -349,11 +529,9 @@
           Math.abs(SHIP_DEPTH - camera.position.z)
         );
       }
-
       function clampTargetShipPosition() {
         const visibleHeight = getVisibleHeight();
         const visibleWidth = getVisibleWidth();
-
         targetShipPosition.x = THREE.MathUtils.clamp(
           targetShipPosition.x,
           -visibleWidth / 2.2,
@@ -366,42 +544,29 @@
         );
         targetShipPosition.z = SHIP_DEPTH;
       }
-
       function updateTargetPositionFromScreenCoords(clientX, clientY) {
         mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
         mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
-
         const vector = new THREE.Vector3(mouseNDC.x, mouseNDC.y, 0.5);
         vector.unproject(camera);
-
         const dir = vector.sub(camera.position).normalize();
         const distance = (SHIP_DEPTH - camera.position.z) / dir.z;
-
         targetShipPosition
           .copy(camera.position)
           .add(dir.multiplyScalar(distance));
-
         clampTargetShipPosition();
       }
-
       function onMouseMove(event) {
         if (isGameOver) return;
         updateTargetPositionFromScreenCoords(event.clientX, event.clientY);
       }
-
       function onMouseDown(event) {
         if (isGameOver) return;
-        if (event.button === 0) {
-          isShooting = true;
-        }
+        if (event.button === 0) isShooting = true;
       }
-
       function onMouseUp(event) {
-        if (event.button === 0) {
-          isShooting = false;
-        }
+        if (event.button === 0) isShooting = false;
       }
-
       function onTouchStart(event) {
         if (isGameOver) return;
         event.preventDefault();
@@ -410,14 +575,10 @@
           isTouching = true;
           const touch = event.touches[0];
           touchStartPos.set(touch.clientX, touch.clientY);
-          if (playerShip) {
-            touchStartShipPos.copy(playerShip.position);
-          } else {
-            touchStartShipPos.copy(targetShipPosition);
-          }
+          if (playerShip) touchStartShipPos.copy(playerShip.position);
+          else touchStartShipPos.copy(targetShipPosition);
         }
       }
-
       function onTouchMove(event) {
         if (isGameOver) return;
         event.preventDefault();
@@ -439,7 +600,6 @@
           clampTargetShipPosition();
         }
       }
-
       function onTouchEnd(event) {
         if (event.touches.length === 0) {
           isShooting = false;
@@ -450,112 +610,89 @@
             movementTouchStillActive = true;
             break;
           }
-          if (!movementTouchStillActive) {
-            isTouching = false;
-          }
+          if (!movementTouchStillActive) isTouching = false;
           isShooting = true;
         }
       }
 
+      // --- Spawning ---
       function spawnAsteroid() {
         if (asteroids.length >= MAX_ASTEROIDS) return;
-
         const asteroid = makeAsteroid();
-
         const spawnZ = camera.position.z - SPAWN_DISTANCE;
-
-        // TODO base it on the screen size
         const height = getVisibleHeight() / 2.2;
         const width = getVisibleWidth() / 2.2;
-
         asteroid.position.set(
           THREE.MathUtils.randFloatSpread(width),
           THREE.MathUtils.randFloatSpread(height),
           spawnZ
         );
-
         const scale = THREE.MathUtils.randFloat(
           ASTEROID_SCALE_MIN,
           ASTEROID_SCALE_MAX
         );
         asteroid.scale.setScalar(scale);
-        asteroid.userData.originalScale = scale; // Store the actual initial scale
-        // Scale the bounding radius based on geometry radius and final scale
+        asteroid.userData.originalScale = scale;
         asteroid.userData.boundingRadius *= scale;
-
         asteroid.rotation.set(
           Math.random() * Math.PI * 2,
           Math.random() * Math.PI * 2,
           Math.random() * Math.PI * 2
         );
-
         scene.add(asteroid);
         asteroids.push(asteroid);
       }
-
       function spawnProjectile() {
         if (!playerShip || projectiles.length >= MAX_PROJECTILES) return;
-
         const projectile = new THREE.Mesh(
           projectileGeometry,
           projectileMaterial
         );
-
         const spawnOffset = new THREE.Vector3(0, 0, -1);
         spawnOffset.applyQuaternion(playerShip.quaternion);
         projectile.position.copy(playerShip.position).add(spawnOffset);
-
         const velocity = new THREE.Vector3(0, 0, -PROJECTILE_SPEED);
-
         projectile.userData = {
           velocity: velocity,
           boundingRadius: PROJECTILE_RADIUS,
           isProjectile: true,
         };
-
         scene.add(projectile);
         projectiles.push(projectile);
       }
 
+      // --- Update Functions ---
       function updateAsteroids(deltaTime) {
         for (let i = asteroids.length - 1; i >= 0; i--) {
           const asteroid = asteroids[i];
-
-          // --- Handle Dying Asteroids ---
           if (asteroid.userData.isDying) {
             asteroid.userData.dyingTimer -= deltaTime;
-
             if (asteroid.userData.dyingTimer <= 0) {
               disposeObject(asteroid);
               asteroids.splice(i, 1);
             } else {
-              // Calculate scale based on remaining time
               const scaleFactor = THREE.MathUtils.clamp(
                 asteroid.userData.dyingTimer / ASTEROID_DESTRUCTION_DURATION,
                 0,
-                1 // Clamp between 0 and 1
+                1
               );
               asteroid.scale.setScalar(
                 asteroid.userData.originalScale * scaleFactor
               );
-              // Optional: Could also fade color back from white here if desired
+              // Optionally revert flash color gradually here
             }
-            continue; // Skip normal updates for dying asteroids
+            continue;
           }
-          // --- End Dying Asteroid Handling ---
 
-          // Normal asteroid update
           if (!asteroid.userData || !asteroid.userData.velocity) {
             console.warn("Asteroid missing user data, removing:", asteroid);
-            disposeObject(asteroid); // Use disposeObject here too
+            disposeObject(asteroid);
             asteroids.splice(i, 1);
             continue;
           }
           const velocity = asteroid.userData.velocity;
           const rotSpeed = asteroid.userData.rotationSpeed;
-
           asteroid.position.addScaledVector(velocity, deltaTime);
-
           asteroid.rotation.x += rotSpeed.x * deltaTime;
           asteroid.rotation.y += rotSpeed.y * deltaTime;
           asteroid.rotation.z += rotSpeed.z * deltaTime;
@@ -567,42 +704,33 @@
           }
         }
       }
-
       function updateProjectiles(deltaTime) {
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const projectile = projectiles[i];
           if (!projectile.userData || !projectile.userData.velocity) {
             console.warn("Projectile missing user data, removing:", projectile);
-            disposeObject(projectile); // Use disposeObject
+            disposeObject(projectile);
             projectiles.splice(i, 1);
             continue;
           }
           const velocity = projectile.userData.velocity;
-
           projectile.position.addScaledVector(velocity, deltaTime);
-
           if (projectile.position.z < PROJECTILE_DESPAWN_Z) {
             disposeObject(projectile);
             projectiles.splice(i, 1);
           }
         }
       }
-
       function updatePlayerShip(deltaTime) {
         if (!playerShip) return;
-
         playerShip.position.lerp(targetShipPosition, PLAYER_SMOOTHING);
-
-        if (shipBoundingSphere) {
+        if (shipBoundingSphere)
           shipBoundingSphere.center.copy(playerShip.position);
-        }
 
         const bankAmount = (targetShipPosition.x - playerShip.position.x) * 0.5;
         const tiltAmount = (targetShipPosition.y - playerShip.position.y) * 0.2;
-
         const targetQuaternion = new THREE.Quaternion();
         const baseRotationX = Math.PI * 0.05;
-
         const targetEuler = new THREE.Euler(
           baseRotationX - tiltAmount,
           0,
@@ -610,16 +738,34 @@
           "XYZ"
         );
         targetQuaternion.setFromEuler(targetEuler);
-
         playerShip.quaternion.slerp(targetQuaternion, PLAYER_SMOOTHING * 1.5);
+
+        // Handle invulnerability flashing
+        if (isInvulnerable) {
+          invulnerabilityTimer -= deltaTime;
+          // Flash every ~0.1 seconds
+          shipFlashToggle = !shipFlashToggle;
+          playerShip.visible = shipFlashToggle; // Toggle visibility for flashing
+
+          if (invulnerabilityTimer <= 0) {
+            isInvulnerable = false;
+            playerShip.visible = true; // Ensure ship is visible at the end
+          }
+        } else {
+          if (playerShip && !playerShip.visible) {
+            playerShip.visible = true; // Ensure visible if not invulnerable
+          }
+        }
       }
 
+      // --- Collision Detection ---
       function checkShipAsteroidCollision() {
-        if (!playerShip || !shipBoundingSphere) return false;
+        if (!playerShip || !shipBoundingSphere || isInvulnerable || isGameOver)
+          return; // No collision if invulnerable or game over
 
-        for (let i = 0; i < asteroids.length; i++) {
+        for (let i = asteroids.length - 1; i >= 0; i--) {
+          // Iterate backwards for safe removal
           const asteroid = asteroids[i];
-          // Skip collision check if asteroid is already dying
           if (
             !asteroid.userData ||
             asteroid.userData.isDying ||
@@ -631,10 +777,26 @@
           const distance = playerShip.position.distanceTo(asteroid.position);
 
           if (distance < shipBoundingSphere.radius + asteroidRadius) {
-            return true;
+            // Collision detected!
+            playerHealth -= SHIP_COLLISION_DAMAGE;
+            isInvulnerable = true;
+            invulnerabilityTimer = INVULNERABILITY_DURATION;
+            shipFlashToggle = false; // Start flashing cycle
+
+            // Destroy the asteroid that hit the player
+            markAsteroidAsDying(asteroid); // This also increments counter and updates UI
+
+            updateUI(); // Update health bar immediately
+
+            console.log("Ship hit! Health:", playerHealth);
+
+            if (playerHealth <= 0) {
+              gameOver();
+            }
+            // Only process one collision per frame
+            break;
           }
         }
-        return false;
       }
 
       function checkProjectileAsteroidCollisions() {
@@ -644,7 +806,6 @@
 
           for (let j = asteroids.length - 1; j >= 0; j--) {
             const asteroid = asteroids[j];
-            // Skip collision check if asteroid is already dying
             if (
               !asteroid.userData ||
               asteroid.userData.isDying ||
@@ -658,77 +819,25 @@
               asteroid.userData.boundingRadius;
 
             if (distance < collisionThreshold) {
-              // --- Start Asteroid Destruction Animation ---
-              asteroid.userData.isDying = true;
-              asteroid.userData.dyingTimer = ASTEROID_DESTRUCTION_DURATION;
-              // Store original scale *if not already stored* (should be set at spawn)
-              // asteroid.userData.originalScale = asteroid.scale.x;
+              markAsteroidAsDying(asteroid); // Marks as dying, starts flash/shrink, increments counter, updates UI
 
-              // Flash Effect
-              asteroid.material.color.copy(ASTEROID_FLASH_COLOR);
-              asteroid.material.emissive.copy(ASTEROID_FLASH_COLOR); // Make it glow white
-              // Flash outline too (optional)
-              if (asteroid.children[0] && asteroid.children[0].material) {
-                asteroid.children[0].material.color.copy(ASTEROID_FLASH_COLOR);
-              }
-
-              // Stop movement (handled now in updateAsteroids)
-              // asteroid.userData.velocity.set(0,0,0);
-              // asteroid.userData.rotationSpeed.set(0,0,0);
-              // --- End Asteroid Destruction Animation ---
-
-              // Remove the projectile immediately
               disposeObject(projectile);
               projectiles.splice(i, 1);
-
-              break; // Projectile is destroyed, move to the next projectile
+              break; // Projectile hit one asteroid, move to next projectile
             }
           }
         }
       }
 
-      function disposeObject(obj) {
-        if (!obj) return;
-
-        // Remove from scene first
-        if (obj.parent) {
-          obj.parent.remove(obj);
-        } else if (scene.children.includes(obj)) {
-          // Check if it's a direct child of the scene
-          scene.remove(obj);
-        }
-
-        // Dispose geometry and material(s)
-        if (obj.geometry) {
-          obj.geometry.dispose();
-        }
-        if (obj.material) {
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((material) => {
-              if (material.map) material.map.dispose(); // Dispose textures
-              material.dispose();
-            });
-          } else {
-            if (obj.material.map) obj.material.map.dispose(); // Dispose texture
-            obj.material.dispose();
-          }
-        }
-
-        // Dispose children recursively
-        // Use a while loop as modifying the array while iterating can cause issues
-        while (obj.children.length > 0) {
-          disposeObject(obj.children[0]); // Recursively dispose the first child
-          // The child should have been removed from its parent in the recursive call,
-          // but double-check or ensure obj.remove(obj.children[0]) happens if needed.
-        }
-      }
-
+      // --- Game Flow ---
       function gameOver() {
+        console.log("Game Over!");
         isGameOver = true;
         isShooting = false;
         cancelAnimationFrame(animationFrameId);
         gameOverScreen.style.display = "flex";
         document.body.style.cursor = "default";
+        if (playerShip) playerShip.visible = true; // Ensure ship is visible on game over screen
       }
 
       function restartGame() {
@@ -742,23 +851,28 @@
           playerShip.position.copy(targetShipPosition);
           playerShip.quaternion.set(0, 0, 0, 1);
           playerShip.rotation.x = Math.PI * 0.05;
+          playerShip.visible = true; // Ensure ship is visible
         }
 
-        // Clear existing objects using the dispose helper
+        // Clear existing objects
         for (let i = asteroids.length - 1; i >= 0; i--) {
           disposeObject(asteroids[i]);
         }
         asteroids.length = 0;
-
         for (let i = projectiles.length - 1; i >= 0; i--) {
           disposeObject(projectiles[i]);
         }
         projectiles.length = 0;
 
+        // Reset game state
         timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
         timeSinceLastShot = 0;
+        playerHealth = SHIP_INITIAL_HEALTH;
+        asteroidsDestroyed = 0;
+        isInvulnerable = false;
+        invulnerabilityTimer = 0;
 
-        // Clock delta reset is handled automatically by getDelta()
+        updateUI(); // Reset UI display
         startGame();
       }
 
@@ -766,48 +880,42 @@
         isGameOver = false;
         isShooting = false;
         document.body.style.cursor = "none";
+        updateUI(); // Initial UI setup
         animate();
       }
 
-      let timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
-
       function animate() {
         if (isGameOver) return;
-
         animationFrameId = requestAnimationFrame(animate);
 
         const deltaTime = clock.getDelta();
         timeSinceLastShot += deltaTime;
 
+        // Spawning
         timeToNextSpawn -= deltaTime;
         if (timeToNextSpawn <= 0) {
           spawnAsteroid();
           timeToNextSpawn = 1.0 / ASTEROID_SPAWN_RATE;
         }
-
         if (isShooting && timeSinceLastShot >= SHOT_COOLDOWN) {
           spawnProjectile();
           timeSinceLastShot = 0;
         }
 
-        // Update order is important: update asteroids *including* dying animation first
+        // Updates (Player update now handles invulnerability timing/visuals)
         updateAsteroids(deltaTime);
         updateProjectiles(deltaTime);
-        updatePlayerShip(deltaTime);
+        updatePlayerShip(deltaTime); // Also updates invulnerability state/visuals
 
-        // Collisions checked after updates
+        // Collisions (Ship collision check now handles damage/invulnerability)
         checkProjectileAsteroidCollisions();
-
-        if (checkShipAsteroidCollision()) {
-          gameOver();
-          return;
-        }
+        checkShipAsteroidCollision(); // Checks and applies damage/effects if needed
 
         renderer.render(scene, camera);
       }
 
+      // --- Event Listeners & Initial Check ---
       window.addEventListener("resize", () => {
-        // Allow resize even if game over, doesn't hurt
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -818,6 +926,8 @@
         instructionsDiv.style.color = "red";
         instructionsDiv.style.display = "block";
         gameOverScreen.style.display = "none";
+        document.getElementById("hud").style.display = "none"; // Hide HUD if no WebGL
+        document.getElementById("asteroidCounter").style.display = "none";
       }
     </script>
   </body>
