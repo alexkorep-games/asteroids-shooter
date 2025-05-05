@@ -91,27 +91,7 @@
         height: 20px;
         margin-right: 8px;
         /* Placeholder: Use an actual heart image/icon later */
-        background-color: #ff4d4d; /* Red color for heart placeholder */
-        border-radius: 50% 50% 50% 0 / 50% 50% 0 50%; /* Simple heart shape */
-        transform: rotate(-45deg);
         position: relative;
-      }
-      #healthIcon::before,
-      #healthIcon::after {
-        content: "";
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background-color: #ff4d4d;
-      }
-      #healthIcon::before {
-        top: -10px;
-        left: 0;
-      }
-      #healthIcon::after {
-        left: 10px;
-        top: 0;
       }
 
       #healthBarOuter {
@@ -156,7 +136,7 @@
     <!-- HUD Elements -->
     <div id="hud">
       <div id="healthContainer">
-        <div id="healthIcon"></div>
+        <div id="healthIcon">❤️</div>
         <div id="healthBarOuter">
           <div id="healthBarInner"></div>
         </div>
