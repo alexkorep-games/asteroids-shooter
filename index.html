@@ -13,6 +13,7 @@
         overflow: hidden;
         /* cursor: none; /* Manage cursor visibility in JS */
         font-family: "Consolas", "Courier New", monospace; /* Pixel-like font */
+        background-color: #000; /* Ensure body bg for contrast */
       }
       canvas {
         display: block;
@@ -36,9 +37,9 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
+        background-color: rgba(0, 0, 0, 0.8); /* Darker overlay */
         color: white;
-        font-family: sans-serif;
+        font-family: "Consolas", "Courier New", monospace; /* Match font */
         display: none; /* Initially hidden */
         flex-direction: column;
         justify-content: center;
@@ -46,21 +47,73 @@
         text-align: center;
         z-index: 20;
         cursor: default; /* Show default cursor over the overlay */
+        padding: 20px;
+        box-sizing: border-box;
       }
       #gameOverScreen h1 {
-        margin-bottom: 20px;
+        margin-bottom: 15px;
+        font-size: 3em;
+        color: #ff4d4d; /* Red Game Over text */
+        text-shadow: 2px 2px #a00;
+      }
+      #finalScore {
+        font-size: 1.5em;
+        margin-bottom: 25px;
+        color: #eee;
       }
       #restartButton {
-        padding: 10px 20px;
-        font-size: 1.2em;
+        padding: 12px 25px;
+        font-size: 1.3em;
         cursor: pointer; /* Pointer specifically for the button */
-        border: none;
+        border: 2px solid #ccc;
         border-radius: 5px;
+        background-color: #333; /* Darker button */
+        color: #eee;
+        margin-top: 30px; /* Space above button */
+        font-family: "Consolas", "Courier New", monospace;
+        transition: background-color 0.2s, color 0.2s;
+      }
+      #restartButton:hover {
         background-color: #eee;
         color: #333;
       }
-      #restartButton:hover {
-        background-color: #ddd;
+
+      /* --- High Score Table Styles --- */
+      #highScoreContainer {
+        margin-top: 30px;
+        background-color: rgba(20, 20, 20, 0.7);
+        padding: 15px 25px;
+        border-radius: 8px;
+        border: 1px solid #555;
+        max-width: 350px;
+        width: 80%;
+      }
+      #highScoreContainer h2 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #0f0; /* Greenish title */
+        font-size: 1.4em;
+        text-decoration: underline;
+      }
+      #highScoreList {
+        list-style-type: decimal; /* Numbered list */
+        padding-left: 30px; /* Indent numbers */
+        margin: 0;
+        text-align: left;
+        font-size: 1.1em;
+        max-height: 150px; /* Limit height */
+        overflow-y: auto; /* Scroll if needed */
+        color: #ddd;
+      }
+      #highScoreList li {
+        margin-bottom: 5px;
+      }
+      #highScoreList .loading,
+      #highScoreList .error {
+        font-style: italic;
+        color: #aaa;
+        text-align: center;
+        list-style: none; /* Remove bullet for status messages */
       }
 
       /* --- HUD Styles --- */
@@ -75,13 +128,14 @@
         pointer-events: none; /* Allow clicking through HUD */
         z-index: 15;
         color: white;
+        font-family: "Consolas", "Courier New", monospace; /* Consistent font */
       }
 
       #healthContainer {
         display: flex;
         align-items: center;
         background-color: rgba(0, 0, 0, 0.5);
-        padding: 5px;
+        padding: 5px 8px;
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.3);
       }
@@ -92,6 +146,8 @@
         margin-right: 8px;
         /* Placeholder: Use an actual heart image/icon later */
         position: relative;
+        font-size: 18px; /* Adjust emoji size */
+        line-height: 20px; /* Align emoji vertically */
       }
 
       #healthBarOuter {
@@ -101,7 +157,7 @@
         border: 1px solid #666;
         border-radius: 3px;
         overflow: hidden; /* Ensure inner bar stays within bounds */
-        margin-top: 2px; /* Align slightly better with icon */
+        /* margin-top: 2px; /* Align slightly better with icon */
       }
 
       #healthBarInner {
@@ -123,10 +179,8 @@
         color: #eee;
         z-index: 15;
         text-align: right;
-        /* Simple asteroid icon using text - can be replaced with image */
-        /* content: "☄️ "; Add emoji if font supports */
+        font-family: "Consolas", "Courier New", monospace;
       }
-      /* Style for the new speed indicator */
       #speedIndicator {
         position: absolute; /* Position independently */
         bottom: 20px; /* Same distance from bottom as asteroid counter */
@@ -156,46 +210,108 @@
           <div id="healthBarInner"></div>
         </div>
       </div>
-      <!-- Removed asteroid counter from flex container -->
     </div>
     <div id="speedIndicator">🚀 0.0 m/sec</div>
-    <div id="asteroidCounter">0 ☄️</div>
-    <!-- Placed outside flex for absolute positioning -->
+    <div id="asteroidCounter">0 / 0 ☄️</div>
 
     <div id="instructions">Loading assets...</div>
+
     <div id="gameOverScreen">
       <h1>Game Over</h1>
+      <div id="finalScore">Final Score: 0</div>
+      <!-- Added Final Score Display -->
+
+      <!-- High Score Section -->
+      <div id="highScoreContainer">
+        <h2>Global Records</h2>
+        <ol id="highScoreList">
+          <li class="loading">Loading scores...</li>
+          <!-- Scores will be populated here -->
+        </ol>
+      </div>
+      <!-- End High Score Section -->
+
       <button id="restartButton">Restart Game</button>
     </div>
 
+    <!-- ES Module Shims -->
     <script
       async
       src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"
     ></script>
 
+    <!-- Import Map -->
     <script type="importmap">
       {
         "imports": {
           "three": "https://unpkg.com/three@0.156.1/build/three.module.js",
           "three/addons/": "https://unpkg.com/three@0.156.1/examples/jsm/",
-          "simplex-noise": "https://unpkg.com/simplex-noise@4.0.1/dist/esm/simplex-noise.js"
+          "simplex-noise": "https://unpkg.com/simplex-noise@4.0.1/dist/esm/simplex-noise.js",
+          "firebase/app": "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js",
+          "firebase/database": "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"
         }
       }
     </script>
 
+    <!-- Main Game Script -->
     <script type="module">
       import * as THREE from "three";
       import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
       import { createNoise3D } from "simplex-noise";
+      // Import Firebase modules
+      import { initializeApp } from "firebase/app";
+      import {
+        getDatabase,
+        ref,
+        push,
+        serverTimestamp,
+        query,
+        orderByChild,
+        limitToLast,
+        get,
+        remove,
+        onValue, // Optional: for real-time updates if desired
+      } from "firebase/database";
 
-      // Game Constants
+      // --- Firebase Configuration ---
+      const firebaseConfig = {
+        apiKey: "AIzaSyBoO3ZOL4QqxxtcyT4UDK9F09VjjBqXCQA",
+        authDomain: "retroglide.firebaseapp.com",
+        databaseURL:
+          "https://retroglide-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "retroglide",
+        storageBucket: "retroglide.firebasestorage.app",
+        messagingSenderId: "791505722362",
+        appId: "1:791505722362:web:9b72f63d1bf3ee1740a243",
+      };
+
+      // Initialize Firebase
+      let firebaseApp;
+      let database;
+      let highScoresRef;
+      const HIGH_SCORE_COUNT = 10; // Number of scores to display/keep
+
+      try {
+        firebaseApp = initializeApp(firebaseConfig);
+        database = getDatabase(firebaseApp);
+        highScoresRef = ref(database, "highscores"); // Path in your database
+        console.log("Firebase initialized successfully.");
+      } catch (error) {
+        console.error("Firebase initialization failed:", error);
+        // Optionally display an error to the user
+        // You could disable high score functionality here
+        database = null; // Ensure database operations fail gracefully later
+      }
+
+      // --- Game Constants ---
+      // (Keep existing constants)
       const ASTEROID_SPAWN_RATE = 3;
       const INITIAL_ASTEROID_SPEED = 20.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const ASTEROID_BASE_RADIUS = 1.0;
-      const ASTEROID_DESTRUCTION_DURATION = 0.2; // Duration for shrink animation
-      const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff); // White flash
+      const ASTEROID_DESTRUCTION_DURATION = 0.2;
+      const ASTEROID_FLASH_COLOR = new THREE.Color(0xffffff);
 
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
@@ -205,8 +321,8 @@
       const MOVEMENT_RATIO = 2.0;
       const SHIP_COLLISION_RADIUS_FACTOR = 0.4;
       const SHIP_INITIAL_HEALTH = 100;
-      const SHIP_COLLISION_DAMAGE = 10; // Health lost per asteroid hit
-      const INVULNERABILITY_DURATION = 1.5; // Seconds of invulnerability after hit
+      const SHIP_COLLISION_DAMAGE = 10;
+      const INVULNERABILITY_DURATION = 1.5;
 
       const PROJECTILE_SPEED = 100.0;
       const PROJECTILE_RADIUS = 0.1;
@@ -214,7 +330,7 @@
       const MAX_PROJECTILES = 30;
       const PROJECTILE_DESPAWN_Z = -130;
 
-      // Three.js Setup
+      // --- Three.js Setup ---
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById("c"),
         antialias: true,
@@ -238,7 +354,7 @@
 
       const clock = new THREE.Clock();
 
-      // Game State Variables
+      // --- Game State Variables ---
       let playerShip = null;
       const asteroids = [];
       const projectiles = [];
@@ -260,19 +376,21 @@
       let totalAsteroidsSpawned = 0;
       let isInvulnerable = false;
       let invulnerabilityTimer = 0;
-      let shipFlashToggle = false; // For flashing effect
-      let shipOriginalMaterial = null; // To store original material for flashing
+      let shipFlashToggle = false;
+      let shipOriginalMaterial = null;
       let asteroidSpeed = INITIAL_ASTEROID_SPEED;
 
-      // DOM Elements
+      // --- DOM Elements ---
       const instructionsDiv = document.getElementById("instructions");
       const gameOverScreen = document.getElementById("gameOverScreen");
       const restartButton = document.getElementById("restartButton");
       const healthBarInner = document.getElementById("healthBarInner");
       const asteroidCounterDisplay = document.getElementById("asteroidCounter");
       const speedIndicatorDisplay = document.getElementById("speedIndicator");
+      const finalScoreDisplay = document.getElementById("finalScore"); // New
+      const highScoreList = document.getElementById("highScoreList"); // New
 
-      // Loaders
+      // --- Loaders ---
       const loadingManager = new THREE.LoadingManager();
       const fbxLoader = new FBXLoader(loadingManager);
       const textureLoader = new THREE.TextureLoader(loadingManager);
@@ -282,12 +400,12 @@
       document.body.style.cursor = "none";
 
       // Load Background
-      const backgroundTexture = textureLoader.load(
+      textureLoader.load(
         "./assets/background.png",
         (texture) => {
           scene.background = texture;
         },
-        (xhr) => {},
+        undefined,
         (error) => {
           console.error("Error loading background texture:", error);
           instructionsDiv.innerText = `Error loading background: assets/background.png. Check path/file.`;
@@ -296,9 +414,8 @@
       );
 
       // Load Ship Model
-      const shipModelPath = "./assets/Galactic_Soarer_0504175114_texture.fbx";
       fbxLoader.load(
-        shipModelPath,
+        "./assets/Galactic_Soarer_0504175114_texture.fbx",
         (fbx) => {
           playerShip = fbx;
           playerShip.scale.setScalar(0.02);
@@ -310,7 +427,6 @@
           );
           scene.add(playerShip);
 
-          // Store original material for flashing later
           playerShip.traverse((child) => {
             if (child.isMesh && !shipOriginalMaterial) {
               shipOriginalMaterial = child.material;
@@ -363,8 +479,102 @@
         console.error("There was an error loading " + url);
       };
 
-      // --- Utility Functions ---
+      // --- Firebase High Score Functions ---
 
+      async function saveHighScore(score) {
+        if (!database || !highScoresRef || score <= 0) {
+          console.log("Database not available or score is zero, not saving.");
+          return; // Don't save if Firebase isn't initialized or score is 0
+        }
+
+        try {
+          // 1. Push the new score
+          const newScore = {
+            score: score,
+            timestamp: serverTimestamp(), // Use server timestamp for consistency
+          };
+          await push(highScoresRef, newScore);
+          console.log("Score potentially saved:", score);
+
+          // 2. Trim the leaderboard (keep only the top HIGH_SCORE_COUNT)
+          // Fetch all scores, ordered by score ascending
+          const scoresQuery = query(highScoresRef, orderByChild("score"));
+          const snapshot = await get(scoresQuery);
+
+          if (snapshot.exists()) {
+            const scores = [];
+            snapshot.forEach((childSnapshot) => {
+              scores.push({ key: childSnapshot.key, ...childSnapshot.val() });
+            });
+
+            // If we have more scores than allowed, remove the lowest ones
+            if (scores.length > HIGH_SCORE_COUNT) {
+              const scoresToRemove = scores.length - HIGH_SCORE_COUNT;
+              for (let i = 0; i < scoresToRemove; i++) {
+                const keyToRemove = scores[i].key;
+                await remove(ref(database, `highscores/${keyToRemove}`));
+                console.log(`Removed low score entry: ${keyToRemove}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error saving or trimming high score:", error);
+        }
+      }
+
+      async function fetchAndDisplayHighScores() {
+        if (!database || !highScoresRef) {
+          highScoreList.innerHTML =
+            '<li class="error">High score service unavailable.</li>';
+          return;
+        }
+
+        highScoreList.innerHTML = '<li class="loading">Loading scores...</li>'; // Show loading state
+
+        try {
+          // Fetch the TOP N scores (limitToLast retrieves the highest when ordered by score)
+          const scoresQuery = query(
+            highScoresRef,
+            orderByChild("score"),
+            limitToLast(HIGH_SCORE_COUNT)
+          );
+          const snapshot = await get(scoresQuery);
+
+          if (snapshot.exists()) {
+            const scores = [];
+            snapshot.forEach((childSnapshot) => {
+              scores.push(childSnapshot.val());
+            });
+
+            // Reverse sort because limitToLast gives them potentially lowest-to-highest within the top N
+            scores.sort((a, b) => b.score - a.score);
+
+            highScoreList.innerHTML = ""; // Clear loading/previous scores
+            if (scores.length === 0) {
+              highScoreList.innerHTML =
+                '<li class="loading">No scores yet!</li>';
+            } else {
+              scores.forEach((scoreData, index) => {
+                const li = document.createElement("li");
+                // You could add timestamp formatting here if needed:
+                // const date = new Date(scoreData.timestamp);
+                // li.textContent = `${index + 1}. ${scoreData.score} pts (${date.toLocaleDateString()})`;
+                li.textContent = `${index + 1}. ${scoreData.score} pts`;
+                highScoreList.appendChild(li);
+              });
+            }
+          } else {
+            highScoreList.innerHTML = '<li class="loading">No scores yet!</li>';
+          }
+        } catch (error) {
+          console.error("Error fetching high scores:", error);
+          highScoreList.innerHTML =
+            '<li class="error">Could not load scores.</li>';
+        }
+      }
+
+      // --- Utility Functions ---
+      // (Keep makeAsteroid, markAsteroidAsDying, updateSpeed, disposeObject)
       function makeAsteroid() {
         const RADIUS = ASTEROID_BASE_RADIUS;
         const SEGMENTS = 8;
@@ -396,7 +606,7 @@
         const mainMaterial = new THREE.MeshToonMaterial({
           color: 0xdd44aa,
           emissive: 0x110011,
-          flatShading: true,
+          // flatShading: true,
         });
         const mainAsteroid = new THREE.Mesh(geometry, mainMaterial);
         mainAsteroid.userData.originalColor = mainMaterial.color.clone();
@@ -460,6 +670,7 @@
       function updateSpeed() {
         // Increase speed based on the number of asteroids destroyed
         asteroidSpeed = INITIAL_ASTEROID_SPEED + asteroidsDestroyed * 1.5;
+        // Update velocity for NEWLY spawned asteroids (existing ones keep their speed)
       }
 
       function disposeObject(obj) {
@@ -628,6 +839,7 @@
         if (asteroids.length >= MAX_ASTEROIDS) return;
         const asteroid = makeAsteroid();
         totalAsteroidsSpawned++;
+        updateUI();
         const spawnZ = camera.position.z - SPAWN_DISTANCE;
         const height = getVisibleHeight() / 2.2;
         const width = getVisibleWidth() / 2.2;
@@ -688,7 +900,6 @@
               asteroid.scale.setScalar(
                 asteroid.userData.originalScale * scaleFactor
               );
-              // Optionally revert flash color gradually here
             }
             continue;
           }
@@ -840,13 +1051,19 @@
 
       // --- Game Flow ---
       function gameOver() {
-        console.log("Game Over!");
+        console.log("Game Over! Final Score:", asteroidsDestroyed);
         isGameOver = true;
         isShooting = false;
         cancelAnimationFrame(animationFrameId);
+
+        finalScoreDisplay.textContent = `Final Score: ${asteroidsDestroyed}`; // Update final score display
         gameOverScreen.style.display = "flex";
         document.body.style.cursor = "default";
-        if (playerShip) playerShip.visible = true; // Ensure ship is visible on game over screen
+        if (playerShip) playerShip.visible = true;
+
+        // Attempt to save score and display leaderboard
+        saveHighScore(asteroidsDestroyed); // Save score (async, non-blocking)
+        fetchAndDisplayHighScores(); // Fetch and display scores (async, non-blocking)
       }
 
       function restartGame() {
@@ -860,17 +1077,13 @@
           playerShip.position.copy(targetShipPosition);
           playerShip.quaternion.set(0, 0, 0, 1);
           playerShip.rotation.x = Math.PI * 0.05;
-          playerShip.visible = true; // Ensure ship is visible
+          playerShip.visible = true;
         }
 
         // Clear existing objects
-        for (let i = asteroids.length - 1; i >= 0; i--) {
-          disposeObject(asteroids[i]);
-        }
+        asteroids.forEach(disposeObject);
         asteroids.length = 0;
-        for (let i = projectiles.length - 1; i >= 0; i--) {
-          disposeObject(projectiles[i]);
-        }
+        projectiles.forEach(disposeObject);
         projectiles.length = 0;
 
         // Reset game state
@@ -881,8 +1094,9 @@
         totalAsteroidsSpawned = 0;
         isInvulnerable = false;
         invulnerabilityTimer = 0;
+        asteroidSpeed = INITIAL_ASTEROID_SPEED; // Reset speed
 
-        updateUI(); // Reset UI display
+        updateUI();
         startGame();
       }
 
@@ -890,7 +1104,7 @@
         isGameOver = false;
         isShooting = false;
         document.body.style.cursor = "none";
-        updateUI(); // Initial UI setup
+        updateUI();
         animate();
       }
 
@@ -912,14 +1126,14 @@
           timeSinceLastShot = 0;
         }
 
-        // Updates (Player update now handles invulnerability timing/visuals)
+        // Updates
         updateAsteroids(deltaTime);
         updateProjectiles(deltaTime);
-        updatePlayerShip(deltaTime); // Also updates invulnerability state/visuals
+        updatePlayerShip(deltaTime);
 
-        // Collisions (Ship collision check now handles damage/invulnerability)
+        // Collisions
         checkProjectileAsteroidCollisions();
-        checkShipAsteroidCollision(); // Checks and applies damage/effects if needed
+        checkShipAsteroidCollision();
 
         renderer.render(scene, camera);
       }
