@@ -96,7 +96,6 @@
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const ASTEROID_BASE_RADIUS = 1.0;
-      const SPAWN_AREA_WIDTH_RATIO = 0.1;
 
       const PLAYER_SMOOTHING = 0.08;
       const SHIP_DEPTH = 0;
@@ -338,12 +337,22 @@
         return worldPos;
       }
 
-      function clampTargetShipPosition() {
-        const visibleHeight =
+      function getVisibleWidth() {
+        const visibleHeight = getVisibleHeight();
+        return visibleHeight * camera.aspect;
+      }
+
+      function getVisibleHeight() {
+        return (
           2 *
           Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
-          Math.abs(SHIP_DEPTH - camera.position.z);
-        const visibleWidth = visibleHeight * camera.aspect;
+          Math.abs(SHIP_DEPTH - camera.position.z)
+        );
+      }
+
+      function clampTargetShipPosition() {
+        const visibleHeight = getVisibleHeight();
+        const visibleWidth = getVisibleWidth();
 
         targetShipPosition.x = THREE.MathUtils.clamp(
           targetShipPosition.x,
@@ -456,15 +465,12 @@
         const spawnZ = camera.position.z - SPAWN_DISTANCE;
 
         // TODO base it on the screen size
-        const height =
-          2 *
-          Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) *
-          Math.abs(spawnZ - camera.position.z);
-        const width = height * camera.aspect;
-        
+        const height = getVisibleHeight() / 2.2;
+        const width = getVisibleWidth() / 2.2;
+
         asteroid.position.set(
-            THREE.MathUtils.randFloatSpread(width * SPAWN_AREA_WIDTH_RATIO),
-          THREE.MathUtils.randFloatSpread(height * SPAWN_AREA_WIDTH_RATIO),
+          THREE.MathUtils.randFloatSpread(width),
+          THREE.MathUtils.randFloatSpread(height),
           spawnZ
         );
 
