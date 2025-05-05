@@ -241,6 +241,7 @@
       let shipBoundingSphere = null;
       let playerHealth = SHIP_INITIAL_HEALTH;
       let asteroidsDestroyed = 0;
+      let totalAsteroidsSpawned = 0;
       let isInvulnerable = false;
       let invulnerabilityTimer = 0;
       let shipFlashToggle = false; // For flashing effect
@@ -474,7 +475,7 @@
         }
 
         // Update Asteroid Counter
-        asteroidCounterDisplay.textContent = `${asteroidsDestroyed} ☄️`;
+        asteroidCounterDisplay.textContent = `${asteroidsDestroyed}/${totalAsteroidsSpawned} ☄️`;
       }
 
       // --- Input Handling ---
@@ -599,6 +600,7 @@
       function spawnAsteroid() {
         if (asteroids.length >= MAX_ASTEROIDS) return;
         const asteroid = makeAsteroid();
+        totalAsteroidsSpawned++;
         const spawnZ = camera.position.z - SPAWN_DISTANCE;
         const height = getVisibleHeight() / 2.2;
         const width = getVisibleWidth() / 2.2;
@@ -849,6 +851,7 @@
         timeSinceLastShot = 0;
         playerHealth = SHIP_INITIAL_HEALTH;
         asteroidsDestroyed = 0;
+        totalAsteroidsSpawned = 0;
         isInvulnerable = false;
         invulnerabilityTimer = 0;
 
