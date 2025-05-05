@@ -174,7 +174,7 @@
 
       // Game Constants
       const ASTEROID_SPAWN_RATE = 3;
-      const ASTEROID_SPEED = 90.0;
+      const INITIAL_ASTEROID_SPEED = 20.0;
       const ASTEROID_SCALE_MIN = 0.4;
       const ASTEROID_SCALE_MAX = 1.2;
       const ASTEROID_BASE_RADIUS = 1.0;
@@ -246,6 +246,7 @@
       let invulnerabilityTimer = 0;
       let shipFlashToggle = false; // For flashing effect
       let shipOriginalMaterial = null; // To store original material for flashing
+      let asteroidSpeed = INITIAL_ASTEROID_SPEED;
 
       // DOM Elements
       const instructionsDiv = document.getElementById("instructions");
@@ -393,10 +394,9 @@
         mainAsteroid.add(outlineMesh);
         outlineMesh.userData.originalColor = outlineMaterial.color.clone();
 
-        const speed = ASTEROID_SPEED;
         const velocity = new THREE.Vector3(0, 0, 1)
           .normalize()
-          .multiplyScalar(speed);
+          .multiplyScalar(asteroidSpeed);
 
         mainAsteroid.userData = {
           ...mainAsteroid.userData,
@@ -436,7 +436,13 @@
 
         // Increment counter only when an asteroid is marked for dying
         asteroidsDestroyed++;
+        updateSpeed();
         updateUI(); // Update the counter display
+      }
+
+      function updateSpeed() {
+        // Increase speed based on the number of asteroids destroyed
+        asteroidSpeed = INITIAL_ASTEROID_SPEED + asteroidsDestroyed * 1.5;
       }
 
       function disposeObject(obj) {
